@@ -1,0 +1,28 @@
+@font-face {
+    font-family: Yekan;
+    font-style: normal;
+    font-weight: 400;
+    src: url('Yekan.eot');
+    src: url('Yekan.eot?#iefix') format('embedded-opentype'), url('Yekan.woff') format('woff2'), url('Yekan.woff') format('woff'), url('Yekan.ttf') format('truetype')
+}
+
+body,
+.breadcrumb,
+.navigation,
+textarea,
+.header-navbar,
+div.tagsinput span.tag,
+div.tagsinput input,
+.datepicker-plot-area,
+.cke_reset_all,
+.cke_reset_all *,
+.cke_reset_all a,
+.cke_reset_all textarea,
+.cke_notification_message,
+.gm-style,
+.ui-widget {
+    font-family: Yekan !important;
+}
+.fa {
+    font-family: FontAwesome !important;
+}

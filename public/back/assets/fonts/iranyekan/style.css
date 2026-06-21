@@ -1,0 +1,64 @@
+
+@font-face {
+    font-family: iranyekan;
+    font-style: normal;
+    font-weight: bold;
+    src: url('eot/iranyekanwebbold(fanum).eot');
+    src: url('eot/iranyekanwebbold(fanum).eot?#iefix') format('embedded-opentype'),
+        /* IE6-8 */
+    url('woff2/iranyekanwebbold(fanum).woff2') format('woff2'),
+        /* FF39+,Chrome36+, Opera24+*/
+    url('woff/iranyekanwebbold(fanum).woff') format('woff'),
+        /* FF3.6+, IE9, Chrome6+, Saf5.1+*/
+    url('ttf/iranyekanwebbold(fanum).ttf') format('truetype');
+}
+
+@font-face {
+    font-family: iranyekan;
+    font-style: normal;
+    font-weight: 300;
+    src: url('eot/iranyekanweblight(fanum).eot');
+    src: url('eot/iranyekanweblight(fanum).eot?#iefix') format('embedded-opentype'),
+        /* IE6-8 */
+    url('woff2/iranyekanweblight(fanum).woff2') format('woff2'),
+        /* FF39+,Chrome36+, Opera24+*/
+    url('woff/iranyekanweblight(fanum).woff') format('woff'),
+        /* FF3.6+, IE9, Chrome6+, Saf5.1+*/
+    url('ttf/iranyekanweblight(fanum).ttf') format('truetype');
+}
+
+@font-face {
+    font-family: iranyekan;
+    font-style: normal;
+    font-weight: normal;
+    src: url('eot/iranyekanwebregular(fanum).eot');
+    src: url('eot/iranyekanwebregular(fanum).eot?#iefix') format('embedded-opentype'),
+        /* IE6-8 */
+    url('woff2/iranyekanwebregular(fanum).woff2') format('woff2'),
+        /* FF39+,Chrome36+, Opera24+*/
+    url('woff/iranyekanwebregular(fanum).woff') format('woff'),
+        /* FF3.6+, IE9, Chrome6+, Saf5.1+*/
+    url('ttf/iranyekanwebregular(fanum).ttf') format('truetype');
+}
+
+body,
+.breadcrumb,
+.navigation,
+textarea,
+span,
+.header-navbar,
+div.tagsinput span.tag,
+div.tagsinput input,
+.datepicker-plot-area,
+.cke_reset_all,
+.cke_reset_all *,
+.cke_reset_all a,
+.cke_reset_all textarea,
+.cke_notification_message,
+.gm-style,
+.ui-widget {
+    font-family: iranyekan !important;
+}
+.fa {
+    font-family: FontAwesome !important;
+}
