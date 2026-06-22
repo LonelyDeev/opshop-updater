@@ -128,7 +128,7 @@ class UpdateCheckController extends Controller
         }
 
         $filePath = str_replace('/storage/', '', $update->download_link);
-
-        return Storage::disk('public')->download($filePath, $update->title . '_v' . $update->version . '.zip');
+        return Storage::disk('local')->download($filePath, $update->title . '_v' . $update->version . '.zip');
+        //return Storage::disk('public')->download($filePath, $update->title . '_v' . $update->version . '.zip');
     }
 }
