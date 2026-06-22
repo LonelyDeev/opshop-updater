@@ -10,11 +10,9 @@ use App\Http\Controllers\Back\LogController;
 use App\Http\Controllers\Back\SettingController;
 use App\Http\Controllers\Back\UserController;
 use App\Http\Controllers\Back\ProjectController;
+use App\Http\Controllers\Front\UpdateDownloadController;
 
-// مسیرهای عمومی
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
 
 Auth::routes();
 

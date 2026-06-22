@@ -36,7 +36,7 @@ class ProjectController extends Controller
 
         Project::create($validated);
 
-        return redirect()->route('back.projects.index')
+        return redirect()->route('admin.projects.index')
             ->with('success', 'پروژه با موفقیت ایجاد شد.');
     }
 
@@ -67,7 +67,7 @@ class ProjectController extends Controller
 
         $project->update($validated);
 
-        return redirect()->route('back.projects.index')
+        return redirect()->route('admin.projects.index')
             ->with('success', 'پروژه با موفقیت بروزرسانی شد.');
     }
 
@@ -79,7 +79,7 @@ class ProjectController extends Controller
 
         $project->delete();
 
-        return redirect()->route('back.projects.index')
+        return redirect()->route('admin.projects.index')
             ->with('success', 'پروژه با موفقیت حذف شد.');
     }
 }

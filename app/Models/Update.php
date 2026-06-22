@@ -19,6 +19,7 @@ class Update extends Model
         'download_link',
         'release_date',
         'is_mandatory',
+        'project_id',
     ];
 
     protected $casts = [

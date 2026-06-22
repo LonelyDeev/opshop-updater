@@ -1,8 +1,4 @@
---- resources/views/admin/updates/show.blade.php (原始)
-
-
-+++ resources/views/admin/updates/show.blade.php (修改后)
-@extends('layouts.admin')
+@extends('back.layouts.master')
 
 @section('title', 'جزئیات آپدیت')
 

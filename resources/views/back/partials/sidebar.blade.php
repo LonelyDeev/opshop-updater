@@ -15,6 +15,12 @@
                 </a>
             </li>
             <li>
+                <a href="{{ route('admin.projects.index') }}" class="{{ request()->routeIs('admin.projects.*') ? 'active' : '' }}">
+                    <i>📦</i>
+                    <span>مدیریت پروژه ها</span>
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('admin.updates.index') }}" class="{{ request()->routeIs('admin.updates.*') ? 'active' : '' }}">
                     <i>📦</i>
                     <span>مدیریت آپدیت‌ها</span>

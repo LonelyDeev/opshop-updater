@@ -68,6 +68,26 @@
                                         <small class="form-text text-muted">فرمت: Major.Minor.Patch (مثال: 1.2.3)</small>
                                     </div>
 
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <div class="form-group">
+                                                <label for="project">پروژه <span class="text-danger">*</span></label>
+                                                <select name="project_id" id="project" class="form-control @error('project_id') is-invalid @enderror" required>
+                                                    <option value="">انتخاب کنید...</option>
+                                                    @foreach($projects as $project)
+                                                        <option value="{{ $project->id }}" {{ old('project_id') == $project->id ? 'selected' : '' }}>
+                                                            {{ $project->name}}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                @error('project_id')
+                                                <span class="invalid-feedback">{{ $message }}</span>
+                                                @enderror
+                                            </div>
+                                        </div>
+
+                                    </div>
+
                                     <!-- Type & Status Row -->
                                     <div class="row">
                                         <div class="col-md-6">

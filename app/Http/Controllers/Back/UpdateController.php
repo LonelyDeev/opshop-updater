@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Back;
 
 use App\Http\Controllers\Controller;
+use App\Models\Project;
 use App\Models\Update as UpdateModel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -25,7 +26,8 @@ class UpdateController extends Controller
     {
         $types = UpdateModel::getTypes();
         $statuses = UpdateModel::getStatuses();
-        return view('back.updates.create', compact('types', 'statuses'));
+        $projects=Project::latest()->active()->get();
+        return view('back.updates.create', compact('types', 'statuses', 'projects'));
     }
 
     /**
@@ -36,6 +38,7 @@ class UpdateController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'version' => 'required|string|max:50',
+            'project_id' => 'required|exists:projects,id',
             'description' => 'required|string',
             'type' => 'required|in:major,minor,patch',
             'status' => 'required|in:draft,active,archived',
@@ -48,16 +51,26 @@ class UpdateController extends Controller
         // آپلود فایل در صورت وجود
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $filename = time() . '_' . $file->getClientOriginalName();
+            $filename = 'update_' . time() . '_' . $file->getClientOriginalName();
             $path = $file->storeAs('updates', $filename, 'public');
             $validated['download_link'] = Storage::url($path);
         }
+      /*  if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            // تولید نام یکتا برای جلوگیری از تداخل
+            $fileName = 'update_' . time() . '_' . $file->getClientOriginalName();
+
+            // ذخیره در دیسک خصوصی (storage/app/private/updates)
+            $path = $file->storeAs('updates', $fileName, 'private');
+
+            $validatedData['file_path'] = $path;
+        }*/
 
         $validated['is_mandatory'] = $request->has('is_mandatory');
 
         UpdateModel::create($validated);
 
-        return redirect()->route('back.updates.index')
+        return redirect()->route('admin.updates.index')
             ->with('success', 'آپدیت با موفقیت ایجاد شد.');
     }
 
@@ -120,7 +133,7 @@ class UpdateController extends Controller
 
         $update->update($validated);
 
-        return redirect()->route('back.updates.index')
+        return redirect()->route('admin.updates.index')
             ->with('success', 'آپدیت با موفقیت به‌روزرسانی شد.');
     }
 
@@ -141,7 +154,7 @@ class UpdateController extends Controller
 
         $update->delete();
 
-        return redirect()->route('back.updates.index')
+        return redirect()->route('admin.updates.index')
             ->with('success', 'آپدیت با موفقیت حذف شد.');
     }
 }

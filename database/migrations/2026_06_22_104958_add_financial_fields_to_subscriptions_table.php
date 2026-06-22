@@ -29,6 +29,12 @@ return new class extends Migration
                 $table->timestamp('expires_at')->nullable()->after('status'); // تاریخ انقضا
             }
         });
+
+        if (!Schema::hasColumn('customers', 'update_code')) {
+            Schema::table('customers', function (Blueprint $table) {
+                $table->string('update_code')->unique()->after('website_url');
+            });
+        }
     }
 
     public function down(): void
