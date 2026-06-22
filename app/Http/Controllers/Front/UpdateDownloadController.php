@@ -16,6 +16,7 @@ class UpdateDownloadController extends Controller
      */
     public function download($code)
     {
+        dd('ff');
         // 1. پیدا کردن مشتری بر اساس کد آپدیت
         $customer = Customer::where('update_code', $code)->first();
 

@@ -12,7 +12,7 @@ use App\Http\Controllers\Back\UserController;
 use App\Http\Controllers\Back\ProjectController;
 use App\Http\Controllers\Front\UpdateDownloadController;
 
-Route::get('/get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
+Route::get('get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
 
 Auth::routes();
 

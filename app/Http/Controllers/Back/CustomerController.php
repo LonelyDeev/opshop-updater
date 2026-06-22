@@ -38,7 +38,7 @@ class CustomerController extends Controller
 
         Customer::create($validatedData);
 
-        return redirect()->route('customers.index')
+        return redirect()->route('admin.customers.index')
             ->with('success', 'مشتری با موفقیت ایجاد شد.');
     }
 
@@ -60,7 +60,7 @@ class CustomerController extends Controller
 
         $customer->update($validatedData);
 
-        return redirect()->route('customers.index')
+        return redirect()->route('admin.customers.index')
             ->with('success', 'اطلاعات مشتری با موفقیت به‌روزرسانی شد.');
     }
 
@@ -68,7 +68,7 @@ class CustomerController extends Controller
     {
         $customer->delete();
 
-        return redirect()->route('customers.index')
+        return redirect()->route('admin.customers.index')
             ->with('success', 'مشتری با موفقیت حذف شد.');
     }
 }

@@ -57,7 +57,7 @@
                             </span>
                         </td>
                         <td>
-                            <a href="{{ route('customers.edit', $customer) }}" class="btn btn-sm btn-warning">ویرایش</a>
+                            <a href="{{ route('admin.customers.edit', $customer) }}" class="btn btn-sm btn-warning">ویرایش</a>
                         </td>
                     </tr>
                 @empty
