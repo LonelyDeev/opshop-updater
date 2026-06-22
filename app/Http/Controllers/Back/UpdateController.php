@@ -50,21 +50,34 @@ class UpdateController extends Controller
 
         // آپلود فایل در صورت وجود
         if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $filename = 'update_' . time() . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('updates', $filename, 'local');
-            $validated['download_link'] = Storage::url($path);
+            try {
+                $file = $request->file('file');
+
+                // بررسی وجود خطا در آپلود
+                if (!$file->isValid()) {
+                    return back()->with('error', 'خطا در آپلود فایل: ' . $file->getErrorMessage());
+                }
+
+                $filename = 'update_' . time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs('updates', $filename, 'local');
+
+                // بررسی ذخیره شدن
+                if (!$path) {
+                    return back()->with('error', 'فایل ذخیره نشد.');
+                }
+
+                // بررسی وجود فایل در دیسک
+                if (!Storage::disk('local')->exists($path)) {
+                    return back()->with('error', 'فایل آپلود شد اما در دیسک وجود ندارد.');
+                }
+
+                $validated['download_link'] = $path;
+
+            } catch (\Exception $e) {
+                return back()->with('error', 'خطا: ' . $e->getMessage());
+            }
         }
-      /*  if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            // تولید نام یکتا برای جلوگیری از تداخل
-            $fileName = 'update_' . time() . '_' . $file->getClientOriginalName();
 
-            // ذخیره در دیسک خصوصی (storage/app/private/updates)
-            $path = $file->storeAs('updates', $fileName, 'private');
-
-            $validatedData['file_path'] = $path;
-        }*/
 
         $validated['is_mandatory'] = $request->has('is_mandatory');
 
