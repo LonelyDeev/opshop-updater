@@ -33,7 +33,7 @@ class SubscriptionController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'project_id' => 'required|exists:projects,id',
             'start_date' => 'required|date',
-            'duration_months' => 'required|integer|min:1', // مدت اشتراک به ماه
+            'duration_months' => 'required|integer|min:1',
             'price' => 'required|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'payment_status' => 'required|in:pending,paid,failed',
@@ -43,11 +43,14 @@ class SubscriptionController extends Controller
 
         // محاسبه تاریخ انقضا
         $startDate = Carbon::parse($validated['start_date']);
-        $expiresAt = $startDate->copy()->addMonths($validated['duration_months']);
+
+        // ✅ اصلاح: تبدیل صریح به عدد صحیح (int)
+        $durationMonths = (int) $validated['duration_months'];
+        $expiresAt = $startDate->copy()->addMonths($durationMonths);
 
         // محاسبه مبلغ نهایی
-        $price = $validated['price'];
-        $discount = $validated['discount'] ?? 0;
+        $price = (float) $validated['price']; // اطمینان از عددی بودن
+        $discount = isset($validated['discount']) ? (float) $validated['discount'] : 0;
         $finalAmount = max(0, $price - $discount);
 
         Subscription::create([

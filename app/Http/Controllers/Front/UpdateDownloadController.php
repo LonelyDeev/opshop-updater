@@ -16,7 +16,7 @@ class UpdateDownloadController extends Controller
      */
     public function download($code)
     {
-        dd('ff');
+
         // 1. پیدا کردن مشتری بر اساس کد آپدیت
         $customer = Customer::where('update_code', $code)->first();
 
@@ -48,7 +48,7 @@ class UpdateDownloadController extends Controller
         // فرض بر این است که هر اشتراک به یک پروژه متصل است (اگر مدل Subscription فیلد project_id دارد)
         // اگر اشتراک عمومی است، آخرین آپدیت کلی را می‌دهیم
 
-        $query = Update::where('status', 'published');
+        $query = Update::where('status', 'active');
 
         if (isset($validSubscription->project_id)) {
             $query->where('project_id', $validSubscription->project_id);
@@ -56,40 +56,22 @@ class UpdateDownloadController extends Controller
 
         $latestUpdate = $query->orderByDesc('version')->first();
 
-        if (!$latestUpdate || !$latestUpdate->file_path) {
+        if (!$latestUpdate || !$latestUpdate->download_link) {
             abort(404, 'هیچ فایلی برای دانلود یافت نشد.');
         }
 
         // 5. بررسی وجود فایل در دیسک خصوصی
         // فایل‌ها باید در storage/app/private/updates ذخیره شده باشند
-        $filePath = $latestUpdate->file_path;
+        $filePath = $latestUpdate->download_link;
 
-        if (!Storage::disk('private')->exists($filePath)) {
+        if (!Storage::disk('local')->exists($filePath)) {
             abort(404, 'فایل آپدیت در سرور یافت نشد.');
         }
-
-        // 6. ثبت لاگ دانلود (اختیاری اما توصیه شده)
+            // 6. ثبت لاگ دانلود (اختیاری اما توصیه شده)
         // Log::channel('downloads')->info("Download by customer {$customer->email} for update {$latestUpdate->id}");
 
         // 7. استریم کردن فایل به صورت امن
-        return Storage::disk('private')->download($filePath, $latestUpdate->title . '_v' . $latestUpdate->version . '.zip');
+        return Storage::disk('local')->download($filePath, $latestUpdate->title . '_v' . $latestUpdate->version . '.zip');
 
-        // یا اگر می‌خواهید کنترل بیشتری روی هدرها داشته باشید:
-        /*
-        return new StreamedResponse(function () use ($filePath) {
-            $stream = Storage::disk('private')->readStream($filePath);
-            fpassthru($stream);
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-        }, 200, [
-            'Content-Type' => Storage::disk('private')->mimeType($filePath),
-            'Content-Disposition' => 'attachment; filename="' . basename($filePath) . '"',
-            'Cache-Control' => 'no-cache, no-store, must-revalidate',
-            'Pragma' => 'no-cache',
-            'Expires' => '0',
-            'X-Accel-Redirect' => '/protected-updates/' . $filePath, // اگر از Nginx استفاده می‌کنید
-        ]);
-        */
     }
 }

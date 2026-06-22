@@ -20,10 +20,6 @@
         </div>
 
 
-
-        @if(isset($error))
-            <div class="alert alert-warning">{{ $error }}</div>
-        @else
             <!-- فیلتر سطح لاگ -->
             <div class="card mb-3">
                 <div class="card-body">

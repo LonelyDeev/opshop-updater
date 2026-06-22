@@ -52,7 +52,7 @@ class UpdateController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $filename = 'update_' . time() . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('updates', $filename, 'public');
+            $path = $file->storeAs('updates', $filename, 'local');
             $validated['download_link'] = Storage::url($path);
         }
       /*  if ($request->hasFile('file')) {
