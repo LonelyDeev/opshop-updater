@@ -11,13 +11,8 @@ use App\Http\Controllers\Back\SettingController;
 use App\Http\Controllers\Back\UserController;
 use App\Http\Controllers\Back\ProjectController;
 use App\Http\Controllers\Front\UpdateDownloadController;
-use App\Http\Controllers\Api\UpdateCheckController;
 
 Route::get('get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
-Route::get('/check-version', [UpdateCheckController::class, 'check'])->name('api.update.check');
-
-// روت دانلود فایل (لینکی که در JSON برگردانده می‌شود)
-Route::get('/download-update/{code}/{update_id}', [UpdateCheckController::class, 'download'])->name('api.update.download');
 Auth::routes();
 
 
