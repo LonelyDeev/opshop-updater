@@ -72,7 +72,7 @@ class UpdateCheckController extends Controller
         // در اینجا ساده‌ترین حالت: آخرین آپدیت منتشر شده کلی یا مربوط به پروژه اشتراک
         $projectId = $activeSubscription->project_id ?? null;
 
-        $query = Update::where('status', 'published');
+        $query = Update::where('status', 'active');
 
         if ($projectId) {
             $query->where('project_id', $projectId);
