@@ -15,14 +15,21 @@ class Subscription extends Model
         'customer_id',
         'project_id',
         'start_date',
-        'end_date',
+        'expires_at',
         'status',
+        'price',
+        'discount',
+        'final_amount',
+        'payment_status',
         'description',
     ];
 
     protected $casts = [
         'start_date' => 'date',
-        'end_date' => 'date',
+        'expires_at' => 'datetime',
+        'price' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'final_amount' => 'decimal:2',
     ];
 
     // روابط
@@ -36,39 +43,34 @@ class Subscription extends Model
         return $this->belongsTo(Project::class);
     }
 
-    // اسکوپ‌ها
-    public function scopeActive($query)
+    // محاسبه خودکار مبلغ نهایی قبل از ذخیره
+    public static function boot()
     {
-        return $query->where('status', 'active');
-    }
+        parent::boot();
 
-    public function scopeExpiringSoon($query, $days = 7)
-    {
-        return $query->where('status', 'active')
-            ->where('end_date', '<=', Carbon::now()->addDays($days));
-    }
-
-    public function scopeExpired($query)
-    {
-        return $query->where('status', 'expired')
-            ->orWhere('end_date', '<', Carbon::now());
+        static::saving(function ($subscription) {
+            $subscription->final_amount = $subscription->price - $subscription->discount;
+            if ($subscription->final_amount < 0) {
+                $subscription->final_amount = 0;
+            }
+        });
     }
 
     // متد کمکی برای بررسی انقضا
     public function isExpired(): bool
     {
-        if ($this->status === 'expired' || $this->status === 'suspended') {
-            return true;
-        }
-        return $this->end_date < Carbon::now();
+        if (!$this->expires_at) return false;
+        return Carbon::now()->greaterThan($this->expires_at);
     }
 
-    // متد کمکی برای روزهای باقی‌مانده
-    public function daysRemaining(): int
+    // فرمت کردن قیمت به تومان
+    public function getFormattedPriceAttribute(): string
     {
-        if ($this->isExpired()) {
-            return 0;
-        }
-        return Carbon::today()->diffInDays($this->end_date, false);
+        return number_format($this->price) . ' تومان';
+    }
+
+    public function getFormattedFinalAmountAttribute(): string
+    {
+        return number_format($this->final_amount) . ' تومان';
     }
 }

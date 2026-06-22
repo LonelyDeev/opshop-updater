@@ -3,114 +3,105 @@
 namespace App\Http\Controllers\Back;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    /**
-     * نمایش لیست کاربران ادمین
-     */
-    public function index()
+    public function index(Request $request)
     {
-        // دریافت کاربران از دیتابیس
-        $users = []; // بعداً از مدل User گرفته می‌شود
+        $query = User::orderByDesc('created_at');
 
-        return view('back.users', compact('users'));
+        if ($request->filled('search')) {
+            $query->where('name', 'like', "%{$request->search}%")
+                ->orWhere('email', 'like', "%{$request->search}%");
+        }
+
+        if ($request->filled('role')) {
+            $query->where('role', $request->role);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $users = $query->paginate(15);
+        return view('back.users.index', compact('users'));
     }
 
-    /**
-     * فرم ایجاد کاربر جدید
-     */
     public function create()
     {
-        return view('back.users-create');
+        return view('back.users.create');
     }
 
-    /**
-     * ذخیره کاربر جدید
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:super_admin,admin,operator',
-        ]);
-
-        // کد ذخیره‌سازی در دیتابیس اینجا قرار می‌گیرد
-        // $user = User::create([...]);
-
-        return redirect()->route('back.users.index')
-            ->with('success', 'کاربر با موفقیت ایجاد شد.');
-    }
-
-    /**
-     * نمایش جزئیات یک کاربر
-     */
-    public function show($id)
-    {
-        // دریافت کاربر از دیتابیس
-        return view('back.users-show', compact('id'));
-    }
-
-    /**
-     * فرم ویرایش کاربر
-     */
-    public function edit($id)
-    {
-        // دریافت کاربر از دیتابیس
-        return view('back.users-edit', compact('id'));
-    }
-
-    /**
-     * به‌روزرسانی کاربر
-     */
-    public function update(Request $request, $id)
-    {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $id,
-            'password' => 'nullable|string|min:8|confirmed',
-            'role' => 'required|in:super_admin,admin,operator',
+            'role' => 'required|in:admin,operator',
             'status' => 'required|in:active,inactive',
         ]);
 
-        // اگر پسورد وارد شده بود، هش شود
-        // اگر نه، فقط فیلدهای دیگر آپدیت شوند
+        $validated['password'] = Hash::make($validated['password']);
 
-        // کد به‌روزرسانی در دیتابیس اینجا قرار می‌گیرد
+        User::create($validated);
 
-        return redirect()->route('back.users.index')
-            ->with('success', 'کاربر با موفقیت به‌روزرسانی شد.');
+        return redirect()->route('admin.users.index')->with('success', 'کاربر جدید با موفقیت ایجاد شد.');
     }
 
-    /**
-     * حذف کاربر
-     */
-    public function destroy($id)
+    public function edit(User $user)
     {
-        // جلوگیری از حذف خودتان
-        if ($id == auth()->id()) {
-            return redirect()->route('back.users.index')
-                ->with('error', 'نمی‌توانید حساب خودتان را حذف کنید.');
+        return view('back.users.edit', compact('user'));
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => ['required', 'email', Rule::unique('users')->ignore($user)],
+            'password' => 'nullable|string|min:8|confirmed',
+            'role' => 'required|in:admin,operator',
+            'status' => 'required|in:active,inactive',
+        ]);
+
+        if (!empty($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
+        } else {
+            unset($validated['password']);
         }
 
-        // حذف از دیتابیس
+        $user->update($validated);
 
-        return redirect()->route('back.users.index')
-            ->with('success', 'کاربر با موفقیت حذف شد.');
+        return redirect()->route('admin.users.index')->with('success', 'اطلاعات کاربر با موفقیت به‌روزرسانی شد.');
     }
 
-    /**
-     * تغییر وضعیت کاربر
-     */
-    public function toggleStatus($id)
+    public function destroy(User $user)
     {
-        // دریافت کاربر و تغییر وضعیت active/inactive
+        // جلوگیری از حذف خودتان
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'شما نمی‌توانید حساب کاربری خودتان را حذف کنید.');
+        }
 
-        return redirect()->route('back.users.index')
-            ->with('success', 'وضعیت کاربر تغییر کرد.');
+        $user->delete();
+        return redirect()->route('admin.users.index')->with('success', 'کاربر با موفقیت حذف شد.');
+    }
+
+    // تغییر سریع وضعیت (فعال/غیرفعال)
+    public function toggleStatus(User $user)
+    {
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'شما نمی‌توانید وضعیت حساب کاربری خودتان را تغییر دهید.');
+        }
+
+        $newStatus = $user->status === 'active' ? 'inactive' : 'active';
+        $user->update(['status' => $newStatus]);
+
+        $message = $newStatus === 'active' ? 'کاربر فعال شد.' : 'کاربر غیرفعال شد.';
+
+        return back()->with('success', $message);
     }
 }

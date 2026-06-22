@@ -24,7 +24,6 @@ class SubscriptionController extends Controller
     {
         $customers = Customer::where('status', 'active')->get();
         $projects = Project::where('status', 'active')->get();
-
         return view('back.subscriptions.create', compact('customers', 'projects'));
     }
 
@@ -34,19 +33,37 @@ class SubscriptionController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'project_id' => 'required|exists:projects,id',
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
-            'status' => 'required|in:active,expired,suspended',
-            'description' => 'nullable|string|max:1000',
+            'duration_months' => 'required|integer|min:1', // مدت اشتراک به ماه
+            'price' => 'required|numeric|min:0',
+            'discount' => 'nullable|numeric|min:0',
+            'payment_status' => 'required|in:pending,paid,failed',
+            'status' => 'required|in:active,inactive,expired',
+            'description' => 'nullable|string',
         ]);
 
-        // اگر تاریخ پایان گذشته باشد، وضعیت را خودکار منقضی کن
-        if (Carbon::parse($validated['end_date'])->isPast()) {
-            $validated['status'] = 'expired';
-        }
+        // محاسبه تاریخ انقضا
+        $startDate = Carbon::parse($validated['start_date']);
+        $expiresAt = $startDate->copy()->addMonths($validated['duration_months']);
 
-        Subscription::create($validated);
+        // محاسبه مبلغ نهایی
+        $price = $validated['price'];
+        $discount = $validated['discount'] ?? 0;
+        $finalAmount = max(0, $price - $discount);
 
-        return redirect()->route('subscriptions.index')
+        Subscription::create([
+            'customer_id' => $validated['customer_id'],
+            'project_id' => $validated['project_id'],
+            'start_date' => $startDate,
+            'expires_at' => $expiresAt,
+            'status' => $validated['status'],
+            'price' => $price,
+            'discount' => $discount,
+            'final_amount' => $finalAmount,
+            'payment_status' => $validated['payment_status'],
+            'description' => $validated['description'] ?? null,
+        ]);
+
+        return redirect()->route('admin.subscriptions.index')
             ->with('success', 'اشتراک با موفقیت ثبت شد.');
     }
 
@@ -54,8 +71,13 @@ class SubscriptionController extends Controller
     {
         $customers = Customer::all();
         $projects = Project::all();
+        // محاسبه مدت زمان باقی‌مانده برای نمایش در فرم (اختیاری)
+        $duration = 0;
+        if ($subscription->start_date && $subscription->expires_at) {
+            $duration = $subscription->start_date->diffInMonths($subscription->expires_at);
+        }
 
-        return view('back.subscriptions.edit', compact('subscription', 'customers', 'projects'));
+        return view('back.subscriptions.edit', compact('subscription', 'customers', 'projects', 'duration'));
     }
 
     public function update(Request $request, Subscription $subscription)
@@ -64,46 +86,42 @@ class SubscriptionController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'project_id' => 'required|exists:projects,id',
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
-            'status' => 'required|in:active,expired,suspended',
-            'description' => 'nullable|string|max:1000',
+            'duration_months' => 'required|integer|min:1',
+            'price' => 'required|numeric|min:0',
+            'discount' => 'nullable|numeric|min:0',
+            'payment_status' => 'required|in:pending,paid,failed',
+            'status' => 'required|in:active,inactive,expired',
+            'description' => 'nullable|string',
         ]);
 
-        if (Carbon::parse($validated['end_date'])->isPast() && $validated['status'] !== 'suspended') {
-            $validated['status'] = 'expired';
-        }
+        $startDate = Carbon::parse($validated['start_date']);
+        $expiresAt = $startDate->copy()->addMonths($validated['duration_months']);
 
-        $subscription->update($validated);
+        $price = $validated['price'];
+        $discount = $validated['discount'] ?? 0;
+        $finalAmount = max(0, $price - $discount);
 
-        return redirect()->route('subscriptions.index')
-            ->with('success', 'اشتراک با موفقیت به‌روزرسانی شد.');
+        $subscription->update([
+            'customer_id' => $validated['customer_id'],
+            'project_id' => $validated['project_id'],
+            'start_date' => $startDate,
+            'expires_at' => $expiresAt,
+            'status' => $validated['status'],
+            'price' => $price,
+            'discount' => $discount,
+            'final_amount' => $finalAmount,
+            'payment_status' => $validated['payment_status'],
+            'description' => $validated['description'] ?? null,
+        ]);
+
+        return redirect()->route('admin.subscriptions.index')
+            ->with('success', 'اشتراک با موفقیت ویرایش شد.');
     }
 
     public function destroy(Subscription $subscription)
     {
         $subscription->delete();
-
-        return redirect()->route('subscriptions.index')
+        return redirect()->route('admin.subscriptions.index')
             ->with('success', 'اشتراک حذف شد.');
-    }
-
-    // اکشن کمکی برای تمدید سریع (اختیاری اما کاربردی)
-    public function extend(Request $request, Subscription $subscription)
-    {
-        $request->validate([
-            'days' => 'required|integer|min:1'
-        ]);
-
-        $newEndDate = $subscription->end_date->addDays($request->days);
-
-        // اگر تاریخ جدید در آینده است، وضعیت را فعال کن
-        $newStatus = $newEndDate->isFuture() ? 'active' : 'expired';
-
-        $subscription->update([
-            'end_date' => $newEndDate,
-            'status' => $newStatus
-        ]);
-
-        return back()->with('success', "اشتراک به مدت {$request->days} روز تمدید شد.");
     }
 }

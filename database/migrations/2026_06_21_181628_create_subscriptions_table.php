@@ -12,10 +12,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
             $table->foreignId('project_id')->constrained()->cascadeOnDelete();
-
+            $table->decimal('price', 10, 2)->default(0);
             $table->date('start_date');
             $table->date('end_date');
-
+            $table->date('expires_at');
             // وضعیت اشتراک: فعال، منقضی شده، تعلیق شده
             $table->enum('status', ['active', 'expired', 'suspended'])->default('active');
 

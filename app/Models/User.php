@@ -16,7 +16,6 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
-
     /**
      * Get the attributes that should be cast.
      *
@@ -29,4 +28,35 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role',
+        'status',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+    ];
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    // بررسی اینکه آیا کاربر فعال است
+    public function isActive(): bool
+    {
+        return $this->status === 'active';
+    }
+
 }

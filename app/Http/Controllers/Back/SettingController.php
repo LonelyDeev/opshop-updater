@@ -3,102 +3,66 @@
 namespace App\Http\Controllers\Back;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 
 class SettingController extends Controller
 {
-    /**
-     * نمایش صفحه تنظیمات
-     */
     public function index()
     {
-        // تنظیمات فعلی را می‌توانید از دیتابیس یا فایل config بگیرید
-        $settings = [
-            'site_name' => config('app.name'),
-            'site_url' => config('app.url'),
-            'timezone' => config('app.timezone'),
-            'locale' => config('app.locale'),
-        ];
+        // دریافت تنظیمات عمومی
+        $generalSettings = Setting::where('group', 'general')->get()->pluck('value', 'key');
 
-        return view('back.settings', compact('settings'));
+        // دریافت تنظیمات ایمیل
+        $emailSettings = Setting::where('group', 'email')->get()->pluck('value', 'key');
+
+        return view('back.settings.index', compact('generalSettings', 'emailSettings'));
     }
 
-    /**
-     * به‌روزرسانی تنظیمات عمومی
-     */
-    public function updateGeneral(Request $request)
+    public function update(Request $request)
     {
-        $validated = $request->validate([
-            'site_name' => 'required|string|max:255',
-            'site_url' => 'required|url',
-            'timezone' => 'required|string',
-            'locale' => 'required|string',
-        ]);
-
-        // ذخیره تنظیمات در دیتابیس یا فایل config
-        // نکته: برای ذخیره در فایل config نیاز به دسترسی نوشتن دارید
-
-        return redirect()->route('back.settings.index')
-            ->with('success', 'تنظیمات با موفقیت به‌روزرسانی شد.');
-    }
-
-    /**
-     * تنظیمات ایمیل
-     */
-    public function email()
-    {
-        $emailSettings = [
-            'mail_host' => config('mail.mailers.smtp.host'),
-            'mail_port' => config('mail.mailers.smtp.port'),
-            'mail_encryption' => config('mail.mailers.smtp.encryption'),
-            'mail_username' => config('mail.mailers.smtp.username'),
-        ];
-
-        return view('back.settings-email', compact('emailSettings'));
-    }
-
-    /**
-     * به‌روزرسانی تنظیمات ایمیل
-     */
-    public function updateEmail(Request $request)
-    {
-        $validated = $request->validate([
-            'mail_host' => 'required|string',
-            'mail_port' => 'required|integer',
-            'mail_encryption' => 'required|in:tls,ssl,null',
-            'mail_username' => 'required|email',
-            'mail_password' => 'nullable|string',
-        ]);
+        // ذخیره تنظیمات عمومی
+        if ($request->has('general')) {
+            foreach ($request->general as $key => $value) {
+                Setting::set($key, $value, 'string', 'general');
+            }
+        }
 
         // ذخیره تنظیمات ایمیل
+        if ($request->has('email')) {
+            foreach ($request->email as $key => $value) {
+                // اگر چک‌باکس است و تیک نخورده، مقدار false یا 0 باشد
+                if ($key === 'mail_enabled' && !$value) {
+                    $value = 0;
+                }
+                Setting::set($key, $value, 'string', 'email');
+            }
+        }
 
-        return redirect()->route('back.settings.email')
-            ->with('success', 'تنظیمات ایمیل با موفقیت به‌روزرسانی شد.');
+        // پاک کردن کش تنظیمات
+        Cache::forget('settings');
+
+        return redirect()->route('settings.index')
+            ->with('success', 'تنظیمات با موفقیت ذخیره شد.');
     }
 
-    /**
-     * کش سیستم را پاک می‌کند
-     */
     public function clearCache()
     {
         Artisan::call('cache:clear');
         Artisan::call('config:clear');
-        Artisan::call('route:clear');
         Artisan::call('view:clear');
 
-        return redirect()->route('back.settings.index')
-            ->with('success', 'کش سیستم با موفقیت پاک شد.');
+        return redirect()->back()->with('success', 'کش سیستم با موفقیت پاک شد.');
     }
 
-    /**
-     * بهینه‌سازی سیستم
-     */
     public function optimize()
     {
-        Artisan::call('optimize');
+        Artisan::call('config:cache');
+        Artisan::call('route:cache');
+        Artisan::call('view:cache');
 
-        return redirect()->route('back.settings.index')
-            ->with('success', 'سیستم با موفقیت بهینه‌سازی شد.');
+        return redirect()->back()->with('success', 'سیستم بهینه‌سازی شد.');
     }
 }

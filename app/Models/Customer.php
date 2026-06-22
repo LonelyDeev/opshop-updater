@@ -25,6 +25,11 @@ class Customer extends Model
         return $this->hasMany(Update::class);
     }
 
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
     // تولید کد آپدیت در صورت نیاز
     protected static function boot()
     {
