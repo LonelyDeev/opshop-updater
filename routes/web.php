@@ -16,13 +16,14 @@ Route::get('/get-update/{code}', [UpdateDownloadController::class, 'download'])-
 
 Auth::routes();
 
-Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
 // مسیرهای مدیریت با احراز هویت
 Route::prefix('admin')
     ->name('admin.')
     ->middleware(['auth', 'verified']) // افزودن verified در صورت نیاز
     ->group(function () {
+
+        Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
