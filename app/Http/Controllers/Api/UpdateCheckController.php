@@ -121,9 +121,9 @@ class UpdateCheckController extends Controller
             abort(403, 'اشتراک فعال نیست');
         }
 
-        $update = Update::where('id', $updateId)->where('status', 'published')->firstOrFail();
+        $update = Update::where('id', $updateId)->where('status', 'active')->firstOrFail();
 
-        if (!$update->download_link || !Storage::disk('public')->exists(str_replace('/storage/', '', $update->download_link))) {
+        if (!$update->download_link || !Storage::disk('local')->exists($update->download_link)) {
             abort(404, 'فایل یافت نشد');
         }
 
