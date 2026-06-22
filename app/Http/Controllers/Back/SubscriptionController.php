@@ -3,91 +3,107 @@
 namespace App\Http\Controllers\Back;
 
 use App\Http\Controllers\Controller;
+use App\Models\Subscription;
+use App\Models\Customer;
+use App\Models\Project;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class SubscriptionController extends Controller
 {
-    /**
-     * نمایش لیست اشتراک‌ها
-     */
     public function index()
     {
-        $subscriptions = []; // لیست اشتراک‌ها (بعداً از دیتابیس می‌آید)
-        return view('admin.subscriptions', compact('subscriptions'));
+        $subscriptions = Subscription::with(['customer', 'project'])
+            ->orderByDesc('created_at')
+            ->paginate(15);
+
+        return view('back.subscriptions.index', compact('subscriptions'));
     }
 
-    /**
-     * فرم ایجاد اشتراک جدید
-     */
     public function create()
     {
-        return view('admin.subscriptions-create');
+        $customers = Customer::where('status', 'active')->get();
+        $projects = Project::where('status', 'active')->get();
+
+        return view('back.subscriptions.create', compact('customers', 'projects'));
     }
 
-    /**
-     * ذخیره اشتراک جدید
-     */
     public function store(Request $request)
     {
-        // اعتبارسنجی و ذخیره در دیتابیس
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'price' => 'required|numeric|min:0',
-            'duration_days' => 'required|integer|min:1',
-            'features' => 'nullable|array',
+            'customer_id' => 'required|exists:customers,id',
+            'project_id' => 'required|exists:projects,id',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after:start_date',
+            'status' => 'required|in:active,expired,suspended',
+            'description' => 'nullable|string|max:1000',
         ]);
 
-        // کد ذخیره‌سازی در دیتابیس اینجا قرار می‌گیرد
+        // اگر تاریخ پایان گذشته باشد، وضعیت را خودکار منقضی کن
+        if (Carbon::parse($validated['end_date'])->isPast()) {
+            $validated['status'] = 'expired';
+        }
 
-        return redirect()->route('admin.subscriptions.index')
-            ->with('success', 'اشتراک با موفقیت ایجاد شد.');
+        Subscription::create($validated);
+
+        return redirect()->route('subscriptions.index')
+            ->with('success', 'اشتراک با موفقیت ثبت شد.');
     }
 
-    /**
-     * نمایش جزئیات یک اشتراک
-     */
-    public function show($id)
+    public function edit(Subscription $subscription)
     {
-        // دریافت اشتراک از دیتابیس
-        return view('admin.subscriptions-show', compact('id'));
+        $customers = Customer::all();
+        $projects = Project::all();
+
+        return view('back.subscriptions.edit', compact('subscription', 'customers', 'projects'));
     }
 
-    /**
-     * فرم ویرایش اشتراک
-     */
-    public function edit($id)
+    public function update(Request $request, Subscription $subscription)
     {
-        // دریافت اشتراک از دیتابیس
-        return view('admin.subscriptions-edit', compact('id'));
-    }
-
-    /**
-     * به‌روزرسانی اشتراک
-     */
-    public function update(Request $request, $id)
-    {
-        // اعتبارسنجی و به‌روزرسانی در دیتابیس
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'price' => 'required|numeric|min:0',
-            'duration_days' => 'required|integer|min:1',
-            'features' => 'nullable|array',
+            'customer_id' => 'required|exists:customers,id',
+            'project_id' => 'required|exists:projects,id',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after:start_date',
+            'status' => 'required|in:active,expired,suspended',
+            'description' => 'nullable|string|max:1000',
         ]);
 
-        // کد به‌روزرسانی در دیتابیس اینجا قرار می‌گیرد
+        if (Carbon::parse($validated['end_date'])->isPast() && $validated['status'] !== 'suspended') {
+            $validated['status'] = 'expired';
+        }
 
-        return redirect()->route('admin.subscriptions.index')
+        $subscription->update($validated);
+
+        return redirect()->route('subscriptions.index')
             ->with('success', 'اشتراک با موفقیت به‌روزرسانی شد.');
     }
 
-    /**
-     * حذف اشتراک
-     */
-    public function destroy($id)
+    public function destroy(Subscription $subscription)
     {
-        // حذف از دیتابیس
+        $subscription->delete();
 
-        return redirect()->route('admin.subscriptions.index')
-            ->with('success', 'اشتراک با موفقیت حذف شد.');
+        return redirect()->route('subscriptions.index')
+            ->with('success', 'اشتراک حذف شد.');
+    }
+
+    // اکشن کمکی برای تمدید سریع (اختیاری اما کاربردی)
+    public function extend(Request $request, Subscription $subscription)
+    {
+        $request->validate([
+            'days' => 'required|integer|min:1'
+        ]);
+
+        $newEndDate = $subscription->end_date->addDays($request->days);
+
+        // اگر تاریخ جدید در آینده است، وضعیت را فعال کن
+        $newStatus = $newEndDate->isFuture() ? 'active' : 'expired';
+
+        $subscription->update([
+            'end_date' => $newEndDate,
+            'status' => $newStatus
+        ]);
+
+        return back()->with('success', "اشتراک به مدت {$request->days} روز تمدید شد.");
     }
 }

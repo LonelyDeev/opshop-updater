@@ -38,7 +38,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/subscriptions/{id}/edit', [SubscriptionController::class, 'edit'])->name('subscriptions.edit');
     Route::put('/subscriptions/{id}', [SubscriptionController::class, 'update'])->name('subscriptions.update');
     Route::delete('/subscriptions/{id}', [SubscriptionController::class, 'destroy'])->name('subscriptions.destroy');
-
+    Route::post('/{subscription}/extend', [SubscriptionController::class, 'extend'])->name('extend');
     // Reports
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/sales', [ReportController::class, 'sales'])->name('reports.sales');

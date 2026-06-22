@@ -359,6 +359,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    max-height: 40px;
 }
 
 .btn-primary {
