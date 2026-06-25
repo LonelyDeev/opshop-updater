@@ -94,6 +94,7 @@ class UpdateCheckController extends Controller
         $downloadUrl = route('api.update.download', ['code' => $customer->update_code, 'update_id' => $latestUpdate->id]);
 
         return response()->json([
+            'name' => $latestUpdate->title,
             'version' => $latestUpdate->version,
             'download_url' => $downloadUrl,
             'published_at' => $latestUpdate->created_at->toIso8601String(),
