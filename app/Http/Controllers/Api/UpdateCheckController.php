@@ -14,17 +14,19 @@ class UpdateCheckController extends Controller
 {
     public function check(Request $request)
     {
-        $token = $request->query('token'); // یا هدر
+        $token = $request->query('token');
 
-        // 1. بررسی اعتبار توکن و مشتری
+        // دیباگ مرحله 1
         $customer = Customer::where('update_code', $token)->first();
-
-        if (!$customer || $customer->status !== 'active') {
-            // اگر نامعتبر بود، یک HTML خالی یا پیام خطا برگردانید
-            return response('<html><body></body></html>', 403);
+        if (!$customer) {
+            return response("Customer not found for token: $token", 403);
         }
 
-        // 2. بررسی اشتراک فعال
+        if ($customer->status !== 'active') {
+            return response("Customer status is: {$customer->status}", 403);
+        }
+
+        // دیباگ مرحله 2
         $hasActiveSubscription = $customer->subscriptions()
             ->where('status', 'active')
             ->where('payment_status', 'paid')
@@ -33,26 +35,21 @@ class UpdateCheckController extends Controller
             })->exists();
 
         if (!$hasActiveSubscription) {
-            return response('<html><body></body></html>', 403);
+            return response("No active subscription found", 403);
         }
 
-        // 3. دریافت آخرین آپدیت منتشر شده برای پروژه‌های مشتری
-        // (فرض می‌کنیم رابطه‌ای بین مشتری و پروژه‌ها دارید)
+        // دیباگ مرحله 3
         $projectIds = $customer->subscriptions()->pluck('project_id');
-
         $latestUpdate = \App\Models\Update::whereIn('project_id', $projectIds)
             ->where('status', 'published')
             ->orderByDesc('created_at')
             ->first();
 
         if (!$latestUpdate) {
-            return response('<html><body></body></html>');
+            return response("No published updates found for projects: " . implode(',', $projectIds->toArray()));
         }
 
-        // 4. تولید HTML مورد انتظار پکیج codedge
-        // پکیج به دنبال المان‌هایی با کلاس‌های خاص می‌گردد
-        // ما یک ساختار ساده شبیه به لیست ریلیزهای گیت‌هاب می‌سازیم
-
+        // اگر همه چیز درست بود، HTML را برگردانید
         $downloadUrl = route('api.update.download', ['token' => $token, 'file' => $latestUpdate->id]);
 
         $html = <<<HTML
