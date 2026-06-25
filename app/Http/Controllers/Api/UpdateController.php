@@ -57,7 +57,7 @@ class UpdateController extends Controller
         // ما از روت download استفاده می‌کنیم که توکن را چک میکند
         $downloadUrl = route('api.update.download', [
             'token' => $token,
-            'update_id' => $latestUpdate->id
+            'updateId' => $latestUpdate->id
         ]);
 
         return response()->json([
