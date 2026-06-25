@@ -14,92 +14,60 @@ class UpdateCheckController extends Controller
 {
     public function check(Request $request)
     {
-        // دریافت توکن (کد آپدیت) از هدر یا کوئری پارامتر
-        // پکیج معمولاً توکن را در هدر Authorization یا به صورت کوئری می‌فرستد
-        $token = $request->input('token')
-            ?? $request->header('Authorization')
-            ?? str_replace('Bearer ', '', $request->header('Authorization', ''));
+        $token = $request->query('token'); // یا هدر
 
-        if (!$token) {
-            return response()->json([
-                'version' => null,
-                'download_url' => null,
-                'message' => 'کد آپدیت ارسال نشده است.'
-            ], 403);
-        }
-
-        // پیدا کردن مشتری بر اساس کد آپدیت
+        // 1. بررسی اعتبار توکن و مشتری
         $customer = Customer::where('update_code', $token)->first();
 
-        if (!$customer) {
-            return response()->json([
-                'version' => null,
-                'download_url' => null,
-                'message' => 'کد آپدیت نامعتبر است.'
-            ], 404);
+        if (!$customer || $customer->status !== 'active') {
+            // اگر نامعتبر بود، یک HTML خالی یا پیام خطا برگردانید
+            return response('<html><body></body></html>', 403);
         }
 
-        if ($customer->status !== 'active') {
-            return response()->json([
-                'version' => null,
-                'download_url' => null,
-                'message' => 'حساب کاربری شما غیرفعال است.'
-            ], 403);
-        }
-
-        // بررسی اشتراک فعال
-        // فرض بر این است که هر مشتری حداقل یک اشتراک فعال برای دریافت آپدیت دارد
-        // اگر پروژه‌های مختلف دارید، می‌توانید project_id را هم چک کنید
-        $activeSubscription = Subscription::where('customer_id', $customer->id)
+        // 2. بررسی اشتراک فعال
+        $hasActiveSubscription = $customer->subscriptions()
             ->where('status', 'active')
             ->where('payment_status', 'paid')
-            ->where(function ($query) {
-                $query->whereNull('expires_at')
-                    ->orWhere('expires_at', '>', now());
-            })
+            ->where(function($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })->exists();
+
+        if (!$hasActiveSubscription) {
+            return response('<html><body></body></html>', 403);
+        }
+
+        // 3. دریافت آخرین آپدیت منتشر شده برای پروژه‌های مشتری
+        // (فرض می‌کنیم رابطه‌ای بین مشتری و پروژه‌ها دارید)
+        $projectIds = $customer->subscriptions()->pluck('project_id');
+
+        $latestUpdate = \App\Models\Update::whereIn('project_id', $projectIds)
+            ->where('status', 'published')
+            ->orderByDesc('created_at')
             ->first();
 
-        if (!$activeSubscription) {
-            return response()->json([
-                'version' => null,
-                'download_url' => null,
-                'message' => 'اشتراک فعالی برای دریافت آپدیت ندارید.'
-            ], 403);
-        }
-
-        // پیدا کردن آخرین آپدیت منتشر شده برای پروژه مربوطه (اگر پروژه مشخص است)
-        // اگر چند پروژه دارید، بهتر است پکیج self-updater پروژه مورد نظر را هم بفرستد
-        // در اینجا ساده‌ترین حالت: آخرین آپدیت منتشر شده کلی یا مربوط به پروژه اشتراک
-        $projectId = $activeSubscription->project_id ?? null;
-
-        $query = Update::where('status', 'active');
-
-        if ($projectId) {
-            $query->where('project_id', $projectId);
-        }
-
-        $latestUpdate = $query->orderByDesc('version')->first();
-
         if (!$latestUpdate) {
-            return response()->json([
-                'version' => null,
-                'download_url' => null,
-                'message' => 'آپدیتی یافت نشد.'
-            ]);
+            return response('<html><body></body></html>');
         }
 
-        // ساخت لینک دانلود امن (همان روتی که قبلاً ساختیم)
-        // فرض بر این است که روت دانلود شما به صورت /download/{code} است
-        // اگر روت دیگری دارید، آن را جایگزین کنید
-        $downloadUrl = route('api.update.download', ['code' => $customer->update_code, 'update_id' => $latestUpdate->id]);
+        // 4. تولید HTML مورد انتظار پکیج codedge
+        // پکیج به دنبال المان‌هایی با کلاس‌های خاص می‌گردد
+        // ما یک ساختار ساده شبیه به لیست ریلیزهای گیت‌هاب می‌سازیم
 
-        return response()->json([
-            'name' => $latestUpdate->title,
-            'version' => $latestUpdate->version,
-            'download_url' => $downloadUrl,
-            'published_at' => $latestUpdate->created_at->toIso8601String(),
-            'message' => 'آپدیت جدید موجود است.'
-        ]);
+        $downloadUrl = route('api.update.download', ['token' => $token, 'file' => $latestUpdate->id]);
+
+        $html = <<<HTML
+    <div class="release">
+        <h2 class="release-title">
+            <span class="css-truncate-target">v{$latestUpdate->version}</span>
+        </h2>
+        <div class="release-body">
+            <p>{$latestUpdate->description}</p>
+            <a href="{$downloadUrl}" class="btn">Download</a>
+        </div>
+    </div>
+    HTML;
+
+        return response($html)->header('Content-Type', 'text/html');
     }
 
     public function download($code, $updateId)
