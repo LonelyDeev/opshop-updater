@@ -50,6 +50,7 @@ class UpdateCheckController extends Controller
             ->first();
 
         if (!$latestUpdate) {
+            // پاسخ برای زمانی که آپدیتی وجود ندارد
             return response()->json([
                 'success' => true,
                 'version_available' => null,
@@ -57,15 +58,15 @@ class UpdateCheckController extends Controller
             ]);
         }
 
-        // بازگشت اطلاعات به صورت JSON که پکیج self-updater انتظار دارد
+        // پاسخ با ساختار مورد انتظار پکیج laravel-selfupdater
         return response()->json([
             'success' => true,
-            'version_available' => $latestUpdate->version,
-            'version_installed' => $request->input('version_installed', '1.0.0'), // نسخه نصب شده فعلی
-            'download_link' => route('api.update.download', ['code' => $token, 'update_id' => $latestUpdate->id]),
-            'release_notes' => $latestUpdate->description,
+            'version' => $latestUpdate->version,  // این مهم است
+            'name' => $latestUpdate->title ?? 'آپدیت جدید',  // این همان property name است
+            'description' => $latestUpdate->description,
             'release_date' => $latestUpdate->created_at->toIso8601String(),
-            'name' => $latestUpdate->title ?? 'آپدیت جدید'
+            'download_link' => route('api.update.download', ['code' => $token, 'update_id' => $latestUpdate->id]),
+            'version_installed' => $request->input('version_installed', '1.0.0')
         ]);
     }
 
