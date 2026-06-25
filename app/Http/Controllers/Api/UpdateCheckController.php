@@ -20,10 +20,8 @@ class UpdateCheckController extends Controller
         $customer = Customer::where('update_code', $token)->first();
 
         if (!$customer || $customer->status !== 'active') {
-            return response()->json([
-                'success' => false,
-                'message' => 'دسترسی غیرمجاز'
-            ], 403);
+            // اگر نامعتبر بود، یک HTML خالی یا پیام خطا برگردانید
+            return response('<html><body></body></html>', 403);
         }
 
         // 2. بررسی اشتراک فعال
@@ -35,13 +33,11 @@ class UpdateCheckController extends Controller
             })->exists();
 
         if (!$hasActiveSubscription) {
-            return response()->json([
-                'success' => false,
-                'message' => 'اشتراک فعال نیست'
-            ], 403);
+            return response('<html><body></body></html>', 403);
         }
 
-        // 3. دریافت آخرین آپدیت منتشر شده
+        // 3. دریافت آخرین آپدیت منتشر شده برای پروژه‌های مشتری
+        // (فرض می‌کنیم رابطه‌ای بین مشتری و پروژه‌ها دارید)
         $projectIds = $customer->subscriptions()->pluck('project_id');
 
         $latestUpdate = \App\Models\Update::whereIn('project_id', $projectIds)
@@ -50,41 +46,41 @@ class UpdateCheckController extends Controller
             ->first();
 
         if (!$latestUpdate) {
-            // پاسخ برای زمانی که آپدیتی وجود ندارد
-            return response()->json([
-                'success' => true,
-                'version_available' => null,
-                'message' => 'هیچ آپدیتی موجود نیست'
-            ]);
+            return response('<html><body></body></html>');
         }
 
-        // پاسخ با ساختار مورد انتظار پکیج laravel-selfupdater
-        return response()->json([
-            'success' => true,
-            'version' => $latestUpdate->version,  // این مهم است
-            'name' => $latestUpdate->title ?? 'آپدیت جدید',  // این همان property name است
-            'description' => $latestUpdate->description,
-            'release_date' => $latestUpdate->created_at->toIso8601String(),
-            'download_link' => route('api.update.download', ['code' => $token, 'update_id' => $latestUpdate->id]),
-            'version_installed' => $request->input('version_installed', '1.0.0')
-        ]);
+
+        $downloadUrl = route('api.update.download', ['code' => $token, 'update_id' => $latestUpdate->id]);
+
+        $html = <<<HTML
+    <div class="release">
+        <h2 class="release-title">
+            <span class="css-truncate-target">v{$latestUpdate->version}</span>
+        </h2>
+        <div class="release-body">
+            <a href="{$downloadUrl}" class="btn">webapp-v{$latestUpdate->version}.zip</a>
+        </div>
+    </div>
+    HTML;
+
+        return response($html)->header('Content-Type', 'text/html');
     }
 
     public function download($code, $updateId)
     {
+        // این متد مشابه کنترلر قبلی شماست اما مخصوص API
         $customer = Customer::where('update_code', $code)->first();
 
         if (!$customer || $customer->status !== 'active') {
             abort(403, 'دسترسی غیرمجاز');
         }
 
-        // بررسی مجدد اشتراک
+        // بررسی مجدد اشتراک (اختیاری ولی توصیه می‌شود برای امنیت بیشتر)
         $hasActiveSub = Subscription::where('customer_id', $customer->id)
             ->where('status', 'active')
             ->where('payment_status', 'paid')
-            ->where(function ($q) {
-                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
-            })->exists();
+            ->where(function ($q) { $q->whereNull('expires_at')->orWhere('expires_at', '>', now()); })
+            ->exists();
 
         if (!$hasActiveSub) {
             abort(403, 'اشتراک فعال نیست');
@@ -92,15 +88,12 @@ class UpdateCheckController extends Controller
 
         $update = Update::where('id', $updateId)->where('status', 'active')->firstOrFail();
 
-        // بررسی وجود فایل
         if (!$update->download_link || !Storage::disk('local')->exists($update->download_link)) {
             abort(404, 'فایل یافت نشد');
         }
 
-        // تبدیل مسیر
         $filePath = str_replace('/storage/', '', $update->download_link);
-        $fileName = $update->title . '_v' . $update->version . '.zip';
-
-        return Storage::disk('local')->download($filePath, $fileName);
+        return Storage::disk('local')->download($filePath, $update->title . '_v' . $update->version . '.zip');
+        //return Storage::disk('public')->download($filePath, $update->title . '_v' . $update->version . '.zip');
     }
 }
