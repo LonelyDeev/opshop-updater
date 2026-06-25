@@ -55,7 +55,7 @@ class UpdateCheckController extends Controller
         $html = <<<HTML
     <div class="release">
     <div class="release-header">
-        <a href="{$downloadUrl}">webapp-v{$latestUpdate->version}.zip</a>
+        <a href="{$downloadUrl}">v{$latestUpdate->version}</a>
     </div>
     </div>
     HTML;
