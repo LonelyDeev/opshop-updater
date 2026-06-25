@@ -14,55 +14,56 @@ class UpdateCheckController extends Controller
 {
     public function check(Request $request)
     {
-        $token = $request->query('token'); // یا هدر
+        $token = $request->query('token');
 
-        // 1. بررسی اعتبار توکن و مشتری
         $customer = Customer::where('update_code', $token)->first();
 
         if (!$customer || $customer->status !== 'active') {
-            // اگر نامعتبر بود، یک HTML خالی یا پیام خطا برگردانید
-            return response('<html><body></body></html>', 403);
+            abort(403);
         }
 
-        // 2. بررسی اشتراک فعال
         $hasActiveSubscription = $customer->subscriptions()
             ->where('status', 'active')
             ->where('payment_status', 'paid')
-            ->where(function($q) {
-                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
-            })->exists();
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            })
+            ->exists();
 
         if (!$hasActiveSubscription) {
-            return response('<html><body></body></html>', 403);
+            abort(403);
         }
 
-        // 3. دریافت آخرین آپدیت منتشر شده برای پروژه‌های مشتری
-        // (فرض می‌کنیم رابطه‌ای بین مشتری و پروژه‌ها دارید)
-        $projectIds = $customer->subscriptions()->pluck('project_id');
+        $projectIds = $customer->subscriptions()
+            ->pluck('project_id');
 
-        $latestUpdate = \App\Models\Update::whereIn('project_id', $projectIds)
+        $updates = Update::whereIn('project_id', $projectIds)
             ->where('status', 'active')
-            ->orderByDesc('created_at')
-            ->first();
+            ->orderBy('version')
+            ->get();
 
-        if (!$latestUpdate) {
-            return response('<html><body></body></html>');
+        $html = '<html><body>';
+
+        foreach ($updates as $update) {
+
+            $downloadUrl = route('api.update.download', [
+                'code'      => $token,
+                'update_id' => $update->id,
+            ]);
+
+            $html .= sprintf(
+                '<a href="%s">webapp-v%s.zip</a><br>',
+                $downloadUrl,
+                $update->version
+            );
         }
 
+        $html .= '</body></html>';
 
-        $downloadUrl = route('api.update.download', ['code' => $token, 'update_id' => $latestUpdate->id]);
-
-        $html = <<<HTML
-    <div class="release">
-    <div class="release-header">
-        <a href="{$downloadUrl}">v{$latestUpdate->version}</a>
-    </div>
-    </div>
-    HTML;
-
-        return response($html)->header('Content-Type', 'text/html');
+        return response($html)
+            ->header('Content-Type', 'text/html');
     }
-
     public function download($code, $updateId)
     {
         // این متد مشابه کنترلر قبلی شماست اما مخصوص API
