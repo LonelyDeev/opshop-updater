@@ -54,7 +54,7 @@ class UpdateCheckController extends Controller
         // ما یک ساختار ساده شبیه به لیست ریلیزهای گیت‌هاب می‌سازیم
 
         $downloadUrl = route('api.update.download', ['token' => $token, 'file' => $latestUpdate->id]);
-d;
+
         $html = <<<HTML
     <div class="release">
         <h2 class="release-title">
