@@ -49,9 +49,9 @@ class UpdateController extends Controller
         }
 
         // مقایسه نسخه‌ها (نیاز به کتابخانه version_compare دارد)
-        if (version_compare($latestUpdate->version, $currentVersion, '<=')) {
+       /* if (version_compare($latestUpdate->version, $currentVersion, '<=')) {
             return response()->json(['update_available' => false]);
-        }
+        }*/
 
         // ساخت لینک دانلود امن (امضا دار یا موقت)
         // ما از روت download استفاده می‌کنیم که توکن را چک میکند
