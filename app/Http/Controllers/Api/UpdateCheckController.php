@@ -49,11 +49,8 @@ class UpdateCheckController extends Controller
             return response('<html><body></body></html>');
         }
 
-        // 4. تولید HTML مورد انتظار پکیج codedge
-        // پکیج به دنبال المان‌هایی با کلاس‌های خاص می‌گردد
-        // ما یک ساختار ساده شبیه به لیست ریلیزهای گیت‌هاب می‌سازیم
 
-        $downloadUrl = route('api.update.download', ['token' => $token, 'file' => $latestUpdate->id]);
+        $downloadUrl = route('api.update.download', ['code' => $token, 'update_id' => $latestUpdate->id]);
 
         $html = <<<HTML
     <div class="release">
