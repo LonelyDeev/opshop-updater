@@ -74,26 +74,19 @@ class UpdateController extends Controller
     {
         $token = $request->input('token');
 
-        // تکرار بررسی امنیت (خیلی مهم)
         $customer = Customer::where('update_code', $token)->first();
         if (!$customer || $customer->status !== 'active') {
             abort(403, 'Unauthorized');
         }
 
-        // بررسی مجدد اشتراک (برای اطمینان صددرصد)
-        // ... (کد بررسی اشتراک مثل بالا) ...
-
         $update = UpdateModel::findOrFail($updateId);
 
-        // مسیر فایل در دیسک local (storage/app/public/updates/...)
-        // فرض کنیم در دیتابیس فقط نام فایل ذخیره شده: update_v1.2.zip
-        $filePath = 'updates/' . $update->file_name;
-
-        if (!Storage::disk('public')->exists($filePath)) {
+        // ✅ از دیسک local استفاده کن (مسیر storage/app/private)
+        if (!Storage::disk('local')->exists($update->download_link)) {
             abort(404, 'File not found');
         }
 
-        // دانلود فایل بدون نمایش آدرس اصلی
-        return Storage::disk('public')->download($filePath, $update->file_name);
+        // ✅ همان دیسک local برای دانلود
+        return Storage::disk('local')->download($update->download_link, $update->file_name);
     }
 }
