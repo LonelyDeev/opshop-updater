@@ -45,7 +45,7 @@ class UpdateController extends Controller
             'download_link' => 'nullable|url|max:500',
             'release_date'  => 'nullable|date',
             'is_mandatory'  => 'boolean',
-            'file'          => 'nullable|file|mimes:zip,rar,tar,gz|max:102400',
+            'file'          => 'nullable|file|mimes:zip,rar,tar,gz|max:307200',
         ]);
 
         // آپلود فایل در صورت وجود
