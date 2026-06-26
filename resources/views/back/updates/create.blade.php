@@ -32,10 +32,21 @@
                                 <h3 class="card-title">اطلاعات آپدیت</h3>
                             </div>
 
-                            <form action="{{ route('admin.updates.store') }}" method="POST" enctype="multipart/form-data">
+                            <form id="updateForm" enctype="multipart/form-data">
                                 @csrf
 
                                 <div class="card-body">
+                                    <!-- Progress Bar -->
+                                    <div id="progressWrapper" style="display: none;" class="mb-3">
+                                        <div class="progress">
+                                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                                0%
+                                            </div>
+                                        </div>
+                                        <small id="progressText" class="text-muted mt-1">در حال آپلود...</small>
+                                    </div>
+
                                     <!-- Title -->
                                     <div class="form-group">
                                         <label for="title">عنوان آپدیت <span class="text-danger">*</span></label>
@@ -85,7 +96,6 @@
                                                 @enderror
                                             </div>
                                         </div>
-
                                     </div>
 
                                     <!-- Type & Status Row -->
@@ -207,7 +217,7 @@
                                 </div>
 
                                 <div class="card-footer">
-                                    <button type="submit" class="btn btn-primary">
+                                    <button type="submit" id="submitBtn" class="btn btn-primary">
                                         <i class="fas fa-save ml-1"></i>
                                         ذخیره آپدیت
                                     </button>
@@ -233,8 +243,121 @@
                 label.textContent = fileName;
             });
 
-            // Persian Date Picker (Optional - if you have a library)
-            // Example with persian-date library
+            // Ajax Form Submit with Progress
+            document.getElementById('updateForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const form = this;
+                const formData = new FormData(form);
+                const submitBtn = document.getElementById('submitBtn');
+                const progressWrapper = document.getElementById('progressWrapper');
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+
+                // Disable submit button
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-1"></i> در حال ارسال...';
+
+                // Show progress bar
+                progressWrapper.style.display = 'block';
+                progressBar.style.width = '0%';
+                progressBar.textContent = '0%';
+                progressText.textContent = 'در حال آماده‌سازی...';
+
+                // Create XMLHttpRequest
+                const xhr = new XMLHttpRequest();
+
+                // Progress event
+                xhr.upload.addEventListener('progress', function(e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percentComplete + '%';
+                        progressBar.textContent = percentComplete + '%';
+                        progressText.textContent = 'در حال آپلود فایل... ' + percentComplete + '%';
+
+                        // Change progress bar color based on progress
+                        if (percentComplete < 30) {
+                            progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
+                        } else if (percentComplete < 70) {
+                            progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-info';
+                        } else if (percentComplete < 100) {
+                            progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-success';
+                        }
+                    }
+                });
+
+                // Load complete
+                xhr.addEventListener('load', function() {
+                    progressText.textContent = 'در حال پردازش اطلاعات...';
+
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+
+                        if (xhr.status === 200 && response.success) {
+                            progressBar.style.width = '100%';
+                            progressBar.textContent = '100%';
+                            progressBar.className = 'progress-bar bg-success';
+                            progressText.textContent = '✓ آپدیت با موفقیت ایجاد شد!';
+
+                            // Redirect after success
+                            setTimeout(() => {
+                                window.location.href = response.redirect || '{{ route("admin.updates.index") }}';
+                            }, 1500);
+                        } else {
+                            progressBar.className = 'progress-bar bg-danger';
+                            progressText.textContent = '❌ ' + (response.message || 'خطا در ذخیره آپدیت');
+
+                            // Show error messages
+                            if (response.errors) {
+                                let errorHtml = '<div class="alert alert-danger mt-3"><ul class="mb-0">';
+                                for (const [field, messages] of Object.entries(response.errors)) {
+                                    messages.forEach(msg => {
+                                        errorHtml += `<li>${msg}</li>`;
+                                    });
+                                }
+                                errorHtml += '</ul></div>';
+                                document.querySelector('.card-body').insertAdjacentHTML('afterbegin', errorHtml);
+                            }
+
+                            // Re-enable submit button
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = '<i class="fas fa-save ml-1"></i> ذخیره آپدیت';
+                        }
+                    } catch (error) {
+                        progressBar.className = 'progress-bar bg-danger';
+                        progressText.textContent = '❌ خطا در پردازش پاسخ سرور';
+
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fas fa-save ml-1"></i> ذخیره آپدیت';
+                    }
+                });
+
+                // Error event
+                xhr.addEventListener('error', function() {
+                    progressBar.className = 'progress-bar bg-danger';
+                    progressBar.textContent = 'خطا!';
+                    progressText.textContent = '❌ خطا در ارتباط با سرور';
+
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-save ml-1"></i> ذخیره آپدیت';
+                });
+
+                // Abort event
+                xhr.addEventListener('abort', function() {
+                    progressText.textContent = '❌ آپلود لغو شد';
+
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-save ml-1"></i> ذخیره آپدیت';
+                });
+
+                // Open and send request
+                xhr.open('POST', '{{ route("admin.updates.store") }}');
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.send(formData);
+            });
+
+            // Optional: Add cancel upload functionality
+            // You can add a cancel button that calls xhr.abort()
         </script>
     @endpush
 @endsection

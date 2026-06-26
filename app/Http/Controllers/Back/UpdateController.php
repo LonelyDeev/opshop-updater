@@ -35,6 +35,7 @@ class UpdateController extends Controller
      */
     public function store(Request $request)
     {
+        // Validation
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'version' => 'required|string|max:50',
@@ -48,13 +49,19 @@ class UpdateController extends Controller
             'file' => 'nullable|file|mimes:zip,rar,tar,gz|max:102400',
         ]);
 
-        // آپلود فایل در صورت وجود
-        if ($request->hasFile('file')) {
-            try {
+        try {
+            // آپلود فایل در صورت وجود
+            if ($request->hasFile('file')) {
                 $file = $request->file('file');
 
                 // بررسی وجود خطا در آپلود
                 if (!$file->isValid()) {
+                    if ($request->ajax()) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'خطا در آپلود فایل: ' . $file->getErrorMessage()
+                        ], 400);
+                    }
                     return back()->with('error', 'خطا در آپلود فایل: ' . $file->getErrorMessage());
                 }
 
@@ -63,30 +70,55 @@ class UpdateController extends Controller
 
                 // بررسی ذخیره شدن
                 if (!$path) {
+                    if ($request->ajax()) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'فایل ذخیره نشد.'
+                        ], 500);
+                    }
                     return back()->with('error', 'فایل ذخیره نشد.');
                 }
 
                 // بررسی وجود فایل در دیسک
                 if (!Storage::disk('local')->exists($path)) {
+                    if ($request->ajax()) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'فایل آپلود شد اما در دیسک وجود ندارد.'
+                        ], 500);
+                    }
                     return back()->with('error', 'فایل آپلود شد اما در دیسک وجود ندارد.');
                 }
 
                 $validated['download_link'] = $path;
-
-            } catch (\Exception $e) {
-                return back()->with('error', 'خطا: ' . $e->getMessage());
             }
+
+            $validated['is_mandatory'] = $request->has('is_mandatory');
+
+            $update = UpdateModel::create($validated);
+
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'آپدیت با موفقیت ایجاد شد.',
+                    'data' => $update,
+                    'redirect' => route('admin.updates.index')
+                ]);
+            }
+
+            return redirect()->route('admin.updates.index')
+                ->with('success', 'آپدیت با موفقیت ایجاد شد.');
+
+        } catch (\Exception $e) {
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'خطا: ' . $e->getMessage()
+                ], 500);
+            }
+            return back()->with('error', 'خطا: ' . $e->getMessage());
         }
-
-
-        $validated['is_mandatory'] = $request->has('is_mandatory');
-
-        UpdateModel::create($validated);
-
-        return redirect()->route('admin.updates.index')
-            ->with('success', 'آپدیت با موفقیت ایجاد شد.');
     }
-
     /**
      * نمایش جزئیات یک آپدیت
      */
