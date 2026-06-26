@@ -159,8 +159,8 @@ class UpdateController extends Controller
         // حذف فایل مرتبط
         if ($update->download_link) {
             $path = str_replace('/storage/', '', $update->download_link);
-            if (Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
+            if (Storage::disk('local')->exists($update->download_link)) {
+                Storage::disk('local')->delete($update->download_link);
             }
         }
 
