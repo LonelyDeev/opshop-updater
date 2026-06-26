@@ -35,89 +35,56 @@ class UpdateController extends Controller
      */
     public function store(Request $request)
     {
-        // Validation
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'version' => 'required|string|max:50',
-            'project_id' => 'required|exists:projects,id',
-            'description' => 'required|string',
-            'type' => 'required|in:major,minor,patch',
-            'status' => 'required|in:draft,active,archived',
+            'title'         => 'required|string|max:255',
+            'version'       => 'required|string|max:50',
+            'project_id'    => 'required|exists:projects,id',
+            'description'   => 'required|string',
+            'type'          => 'required|in:major,minor,patch',
+            'status'        => 'required|in:draft,active,archived',
             'download_link' => 'nullable|url|max:500',
-            'release_date' => 'nullable|date',
-            'is_mandatory' => 'boolean',
-            'file' => 'nullable|file|mimes:zip,rar,tar,gz|max:102400',
+            'release_date'  => 'nullable|date',
+            'is_mandatory'  => 'boolean',
+            'file'          => 'nullable|file|mimes:zip,rar,tar,gz|max:102400',
         ]);
 
-        try {
-            // آپلود فایل در صورت وجود
-            if ($request->hasFile('file')) {
+        // آپلود فایل در صورت وجود
+        if ($request->hasFile('file')) {
+            try {
                 $file = $request->file('file');
 
-                // بررسی وجود خطا در آپلود
                 if (!$file->isValid()) {
-                    if ($request->ajax()) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'خطا در آپلود فایل: ' . $file->getErrorMessage()
-                        ], 400);
-                    }
-                    return back()->with('error', 'خطا در آپلود فایل: ' . $file->getErrorMessage());
+                    return response()->json([
+                        'message' => 'خطا در آپلود فایل: ' . $file->getErrorMessage(),
+                    ], 500);
                 }
 
                 $filename = 'update_' . time() . '_' . $file->getClientOriginalName();
                 $path = $file->storeAs('updates', $filename, 'local');
 
-                // بررسی ذخیره شدن
                 if (!$path) {
-                    if ($request->ajax()) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'فایل ذخیره نشد.'
-                        ], 500);
-                    }
-                    return back()->with('error', 'فایل ذخیره نشد.');
+                    return response()->json(['message' => 'فایل ذخیره نشد.'], 500);
                 }
 
-                // بررسی وجود فایل در دیسک
                 if (!Storage::disk('local')->exists($path)) {
-                    if ($request->ajax()) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'فایل آپلود شد اما در دیسک وجود ندارد.'
-                        ], 500);
-                    }
-                    return back()->with('error', 'فایل آپلود شد اما در دیسک وجود ندارد.');
+                    return response()->json(['message' => 'فایل آپلود شد اما در دیسک وجود ندارد.'], 500);
                 }
 
                 $validated['download_link'] = $path;
+
+            } catch (\Exception $e) {
+                return response()->json(['message' => 'خطا: ' . $e->getMessage()], 500);
             }
-
-            $validated['is_mandatory'] = $request->has('is_mandatory');
-
-            $update = UpdateModel::create($validated);
-
-            if ($request->ajax()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'آپدیت با موفقیت ایجاد شد.',
-                    'data' => $update,
-                    'redirect' => route('admin.updates.index')
-                ]);
-            }
-
-            return redirect()->route('admin.updates.index')
-                ->with('success', 'آپدیت با موفقیت ایجاد شد.');
-
-        } catch (\Exception $e) {
-            if ($request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'خطا: ' . $e->getMessage()
-                ], 500);
-            }
-            return back()->with('error', 'خطا: ' . $e->getMessage());
         }
+
+        $validated['is_mandatory'] = $request->has('is_mandatory');
+
+        UpdateModel::create($validated);
+
+        return response()->json([
+            'message'  => 'آپدیت با موفقیت ایجاد شد.',
+            'redirect' => route('admin.updates.index'),
+        ], 201);
     }
     /**
      * نمایش جزئیات یک آپدیت
