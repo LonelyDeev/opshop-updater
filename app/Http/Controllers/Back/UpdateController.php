@@ -42,7 +42,7 @@ class UpdateController extends Controller
             'description'   => 'required|string',
             'type'          => 'required|in:major,minor,patch',
             'status'        => 'required|in:draft,active,archived',
-            'download_link' => 'nullable|url|max:500',
+            'download_link' => 'nullable',
             'release_date'  => 'nullable|date',
             'is_mandatory'  => 'boolean',
             'file'          => 'nullable|file|mimes:zip,rar,tar,gz|max:307200',
@@ -123,7 +123,7 @@ class UpdateController extends Controller
             'description'   => 'required|string',
             'type'          => 'required|in:major,minor,patch',
             'status'        => 'required|in:draft,active,archived',
-            'download_link' => 'nullable|url|max:500',
+            'download_link' => 'nullable',
             'release_date'  => 'nullable|date',
             'is_mandatory'  => 'boolean',
             'file'          => 'nullable|file|mimes:zip,rar,tar,gz|max:307200', // 300MB
