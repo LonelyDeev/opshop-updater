@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Back;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +18,8 @@ class CustomerController extends Controller
 
     public function create()
     {
-        return view('back.customers.create');
+        $projects=Project::latest()->active()->get();
+        return view('back.customers.create',compact('projects'));
     }
 
     public function store(Request $request)
@@ -27,6 +29,7 @@ class CustomerController extends Controller
             'email' => 'required|email|unique:customers,email',
             'phone' => 'nullable|string|max:20',
             'website_url' => 'required|url',
+            'project_id'    => 'required|exists:projects,id',
             'update_code' => 'nullable|string|max:255|unique:customers,update_code',
             'status' => 'required|in:active,inactive',
         ]);
@@ -44,7 +47,8 @@ class CustomerController extends Controller
 
     public function edit(Customer $customer)
     {
-        return view('back.customers.edit', compact('customer'));
+        $projects=Project::latest()->active()->get();
+        return view('back.customers.edit', compact('customer','projects'));
     }
 
     public function update(Request $request, Customer $customer)
@@ -54,6 +58,7 @@ class CustomerController extends Controller
             'email' => ['required', 'email', Rule::unique('customers', 'email')->ignore($customer)],
             'phone' => 'nullable|string|max:20',
             'website_url' => 'required|url',
+            'project_id'    => 'required|exists:projects,id',
             'update_code' => ['nullable', 'string', 'max:255', Rule::unique('customers', 'update_code')->ignore($customer)],
             'status' => 'required|in:active,inactive',
         ]);

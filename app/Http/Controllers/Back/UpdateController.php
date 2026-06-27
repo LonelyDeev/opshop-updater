@@ -103,7 +103,8 @@ class UpdateController extends Controller
         $update = UpdateModel::findOrFail($id);
         $types = UpdateModel::getTypes();
         $statuses = UpdateModel::getStatuses();
-        return view('back.updates.edit', compact('update', 'types', 'statuses'));
+        $projects=Project::latest()->active()->get();
+        return view('back.updates.edit', compact('update', 'types', 'statuses','projects'));
     }
 
     /**
