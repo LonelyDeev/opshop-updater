@@ -121,4 +121,61 @@ class UpdateController extends Controller
         // ✅ همان دیسک local برای دانلود
         return Storage::disk('local')->download($update->download_link, $update->file_name);
     }
+
+    /**
+     * بررسی اینکه آیا دامنه درخواست با دامنه مجاز مطابقت دارد
+     */
+    private function isDomainAllowed($allowedDomain, $requestFullDomain, $requestDomain)
+    {
+        // اگر دامنه مجاز خالی باشد، اجازه دسترسی داده می‌شود (اختیاری)
+        if (empty($allowedDomain)) {
+            return true;
+        }
+
+        // نرمال‌سازی دامنه مجاز
+        $allowed = $this->normalizeDomain($allowedDomain);
+        $request = $this->normalizeDomain($requestFullDomain);
+        $requestHost = $this->normalizeDomain($requestDomain);
+
+        // بررسی مطابقت کامل
+        if ($allowed === $request || $allowed === $requestHost) {
+            return true;
+        }
+
+        // بررسی تطابق با Subdomain (اختیاری)
+        // اگر دامنه مجاز example.com باشد، sub.example.com نیز مجاز باشد
+        if (str_ends_with($requestHost, '.' . $allowed)) {
+            return true;
+        }
+
+        // بررسی تطابق با IP (اگر دامنه مجاز IP باشد)
+        if (filter_var($allowed, FILTER_VALIDATE_IP)) {
+            $requestIp = $request->ip();
+            if ($allowed === $requestIp) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * نرمال‌سازی دامنه: حذف پروتکل، www، اسلش انتهایی و پورت
+     */
+    private function normalizeDomain($domain)
+    {
+        // حذف پروتکل (http://, https://)
+        $domain = preg_replace('#^https?://#', '', $domain);
+
+        // حذف www. از ابتدا
+        $domain = preg_replace('/^www\./', '', $domain);
+
+        // حذف اسلش انتهایی
+        $domain = rtrim($domain, '/');
+
+        // حذف پورت (اگر وجود داشته باشد)
+        $domain = preg_replace('/:\d+$/', '', $domain);
+
+        return strtolower(trim($domain));
+    }
 }
