@@ -114,37 +114,68 @@ class UpdateController extends Controller
         $update = UpdateModel::findOrFail($id);
 
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'version' => 'required|string|max:50',
-            'description' => 'required|string',
-            'type' => 'required|in:major,minor,patch',
-            'status' => 'required|in:draft,active,archived',
+            'title'         => 'required|string|max:255',
+            'version'       => 'required|string|max:50',
+            'project_id'    => 'required|exists:projects,id',
+            'description'   => 'required|string',
+            'type'          => 'required|in:major,minor,patch',
+            'status'        => 'required|in:draft,active,archived',
             'download_link' => 'nullable|url|max:500',
-            'release_date' => 'nullable|date',
-            'is_mandatory' => 'boolean',
-            'file' => 'nullable|file|mimes:zip,rar,tar,gz|max:102400',
+            'release_date'  => 'nullable|date',
+            'is_mandatory'  => 'boolean',
+            'file'          => 'nullable|file|mimes:zip,rar,tar,gz|max:307200', // 300MB
         ]);
 
         // آپلود فایل جدید در صورت وجود
         if ($request->hasFile('file')) {
-            // حذف فایل قدیمی
-            if ($update->download_link) {
-                $oldPath = str_replace('/storage/', '', $update->download_link);
-                if (Storage::disk('public')->exists($oldPath)) {
-                    Storage::disk('public')->delete($oldPath);
-                }
-            }
+            try {
+                $file = $request->file('file');
 
-            $file = $request->file('file');
-            $filename = time() . '_' . $file->getClientOriginalName();
-            $path = $file->storeAs('updates', $filename, 'public');
-            $validated['download_link'] = Storage::url($path);
+                if (!$file->isValid()) {
+                    return response()->json([
+                        'message' => 'خطا در آپلود فایل: ' . $file->getErrorMessage(),
+                    ], 500);
+                }
+
+                // حذف فایل قدیمی اگر از نوع ذخیره شده در دیسک باشد
+                if ($update->download_link && !filter_var($update->download_link, FILTER_VALIDATE_URL)) {
+                    // اگر فایل قبلی در دیسک ذخیره شده بود
+                    if (Storage::disk('local')->exists($update->download_link)) {
+                        Storage::disk('local')->delete($update->download_link);
+                    }
+                }
+
+                $filename = 'update_' . time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs('updates', $filename, 'local');
+
+                if (!$path) {
+                    return response()->json(['message' => 'فایل ذخیره نشد.'], 500);
+                }
+
+                if (!Storage::disk('local')->exists($path)) {
+                    return response()->json(['message' => 'فایل آپلود شد اما در دیسک وجود ندارد.'], 500);
+                }
+
+                $validated['download_link'] = $path;
+
+            } catch (\Exception $e) {
+                return response()->json(['message' => 'خطا: ' . $e->getMessage()], 500);
+            }
         }
 
         $validated['is_mandatory'] = $request->has('is_mandatory');
 
         $update->update($validated);
 
+        // اگر درخواست Ajax بود، پاسخ JSON برمی‌گردانیم
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'message'  => 'آپدیت با موفقیت به‌روزرسانی شد.',
+                'redirect' => route('admin.updates.index'),
+            ], 200);
+        }
+
+        // برای درخواست‌های عادی
         return redirect()->route('admin.updates.index')
             ->with('success', 'آپدیت با موفقیت به‌روزرسانی شد.');
     }

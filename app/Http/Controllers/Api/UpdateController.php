@@ -25,6 +25,22 @@ class UpdateController extends Controller
             return response()->json(['error' => 'Invalid token'], 403);
         }
 
+        // ===== فیلتر دامنه =====
+        $allowedDomain = $customer->website_url;
+        $requestDomain = $request->getHost(); // دامنه درخواست فعلی
+
+// اگر درخواست از localhost یا IP باشد، ممکن است پورت هم داشته باشد
+        $requestFullDomain = $request->getHttpHost(); // شامل پورت: example.com:8080
+
+        if (!$this->isDomainAllowed($allowedDomain, $requestFullDomain, $requestDomain)) {
+            return response()->json([
+                'error' => 'Access denied from this domain',
+                'allowed' => $allowedDomain,
+                'current' => $requestFullDomain
+            ], 403);
+        }
+
+
         $hasActiveSubscription = $customer->subscriptions()
             ->where('status', 'active')
             ->where('payment_status', 'paid')
@@ -78,6 +94,22 @@ class UpdateController extends Controller
         if (!$customer || $customer->status !== 'active') {
             abort(403, 'Unauthorized');
         }
+
+        // ===== فیلتر دامنه =====
+        $allowedDomain = $customer->website_url;
+        $requestDomain = $request->getHost(); // دامنه درخواست فعلی
+
+// اگر درخواست از localhost یا IP باشد، ممکن است پورت هم داشته باشد
+        $requestFullDomain = $request->getHttpHost(); // شامل پورت: example.com:8080
+
+        if (!$this->isDomainAllowed($allowedDomain, $requestFullDomain, $requestDomain)) {
+            return response()->json([
+                'error' => 'Access denied from this domain',
+                'allowed' => $allowedDomain,
+                'current' => $requestFullDomain
+            ], 403);
+        }
+
 
         $update = UpdateModel::findOrFail($updateId);
 
