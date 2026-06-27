@@ -72,7 +72,7 @@ class UpdateController extends Controller
                 }
 
                 $validated['download_link'] = $path;
-                $validated['file_size'] = $file->getSize();
+                $validated['file_size'] = $this->formatFileSize($file->getSize());
 
             } catch (\Exception $e) {
                 return response()->json(['message' => 'خطا: ' . $e->getMessage()], 500);
@@ -161,7 +161,7 @@ class UpdateController extends Controller
                 }
 
                 $validated['download_link'] = $path;
-                $validated['file_size'] = $file->getSize();
+                $validated['file_size'] = $this->formatFileSize($file->getSize());
 
             } catch (\Exception $e) {
                 return response()->json(['message' => 'خطا: ' . $e->getMessage()], 500);
@@ -204,5 +204,12 @@ class UpdateController extends Controller
 
         return redirect()->route('admin.updates.index')
             ->with('success', 'آپدیت با موفقیت حذف شد.');
+    }
+
+    private function formatFileSize($bytes, $decimals = 2)
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $factor = floor((strlen($bytes) - 1) / 3);
+        return sprintf("%.{$decimals}f", $bytes / pow(1024, $factor)) . ' ' . $units[$factor];
     }
 }
