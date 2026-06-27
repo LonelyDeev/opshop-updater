@@ -56,7 +56,7 @@ class UpdateController extends Controller
         $projectIds = $customer->subscriptions()->pluck('project_id');
 
         $latestUpdate = UpdateModel::whereIn('project_id', $projectIds)
-            ->where('status', 'active')
+            ->where(['status'=>'active'])
             ->orderByDesc('version') // فرض بر این است که ورژن به صورت صحیح یا رشته قابل مقایسه ذخیره شده
             ->first();
 

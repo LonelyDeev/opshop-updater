@@ -29,7 +29,6 @@ class CustomerController extends Controller
             'email' => 'required|email|unique:customers,email',
             'phone' => 'nullable|string|max:20',
             'website_url' => 'required|url',
-            'project_id'    => 'required|exists:projects,id',
             'update_code' => 'nullable|string|max:255|unique:customers,update_code',
             'status' => 'required|in:active,inactive',
         ]);
@@ -58,7 +57,6 @@ class CustomerController extends Controller
             'email' => ['required', 'email', Rule::unique('customers', 'email')->ignore($customer)],
             'phone' => 'nullable|string|max:20',
             'website_url' => 'required|url',
-            'project_id'    => 'required|exists:projects,id',
             'update_code' => ['nullable', 'string', 'max:255', Rule::unique('customers', 'update_code')->ignore($customer)],
             'status' => 'required|in:active,inactive',
         ]);

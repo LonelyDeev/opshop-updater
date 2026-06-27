@@ -15,7 +15,6 @@ class Customer extends Model
         'email',
         'phone',
         'website_url',
-        'project_id',
         'update_code',
         'status',
     ];

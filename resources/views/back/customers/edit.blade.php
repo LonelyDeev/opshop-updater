@@ -89,21 +89,6 @@
                                             <span class="invalid-feedback d-block error-website_url"></span>
                                         </div>
 
-                                        <!-- Project -->
-                                        <div class="col-md-6 mb-3">
-                                            <div class="form-group">
-                                                <label for="project">پروژه <span class="text-danger">*</span></label>
-                                                <select name="project_id" id="project" class="form-control" required>
-                                                    <option value="">انتخاب کنید...</option>
-                                                    @foreach($projects as $project)
-                                                        <option value="{{ $project->id }}" {{ old('project_id', $customer->project_id) == $project->id ? 'selected' : '' }}>
-                                                            {{ $project->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                                <span class="invalid-feedback d-block error-project_id"></span>
-                                            </div>
-                                        </div>
 
                                         <!-- Update Code -->
                                         <div class="col-md-6 mb-3">
