@@ -21,6 +21,7 @@ return new class extends Migration
             $table->enum('type', ['major', 'minor', 'patch'])->default('minor');
             $table->enum('status', ['draft', 'active', 'archived'])->default('draft');
             $table->string('download_link')->nullable();
+            $table->string('file_size')->nullable();
             $table->timestamp('release_date')->nullable();
             $table->boolean('is_mandatory')->default(false);
             $table->timestamps();

@@ -17,6 +17,7 @@ class Update extends Model
         'type',
         'status',
         'download_link',
+        'file_size',
         'release_date',
         'is_mandatory',
         'project_id',

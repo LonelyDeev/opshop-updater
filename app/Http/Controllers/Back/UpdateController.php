@@ -46,6 +46,7 @@ class UpdateController extends Controller
             'release_date'  => 'nullable|date',
             'is_mandatory'  => 'boolean',
             'file'          => 'nullable|file|mimes:zip,rar,tar,gz|max:307200',
+            'file_size'     => 'nullable',
         ]);
 
         // آپلود فایل در صورت وجود
@@ -71,6 +72,7 @@ class UpdateController extends Controller
                 }
 
                 $validated['download_link'] = $path;
+                $validated['file_size'] = $file->getSize();
 
             } catch (\Exception $e) {
                 return response()->json(['message' => 'خطا: ' . $e->getMessage()], 500);
@@ -125,6 +127,7 @@ class UpdateController extends Controller
             'release_date'  => 'nullable|date',
             'is_mandatory'  => 'boolean',
             'file'          => 'nullable|file|mimes:zip,rar,tar,gz|max:307200', // 300MB
+            'file_size'     => 'nullable',
         ]);
 
         // آپلود فایل جدید در صورت وجود
@@ -158,6 +161,7 @@ class UpdateController extends Controller
                 }
 
                 $validated['download_link'] = $path;
+                $validated['file_size'] = $file->getSize();
 
             } catch (\Exception $e) {
                 return response()->json(['message' => 'خطا: ' . $e->getMessage()], 500);
