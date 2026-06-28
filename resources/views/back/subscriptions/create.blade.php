@@ -14,22 +14,28 @@
                     <div class="row">
                         <!-- انتخاب مشتری و پروژه -->
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">مشتری *</label>
-                            <select name="customer_id" class="form-select" required>
-                                <option value="">انتخاب کنید...</option>
-                                @foreach($customers as $customer)
-                                    <option value="{{ $customer->id }}">{{ $customer->name }} ({{ $customer->email }})</option>
-                                @endforeach
-                            </select>
+                            <div class="form-group">
+                                <label for="customer_id">مشتری <span class="text-danger">*</span></label>
+                                <select name="customer_id" id="customer_id" class="form-control" required="">
+                                    <option value="">انتخاب کنید...</option>
+                                    @foreach($customers as $customer)
+                                        <option value="{{ $customer->id }}">{{ $customer->name }} ({{ $customer->email }})</option>
+                                    @endforeach
+                                </select>
+                                <span class="invalid-feedback d-block error-type"></span>
+                            </div>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">پروژه *</label>
-                            <select name="project_id" class="form-select" required>
-                                <option value="">انتخاب کنید...</option>
-                                @foreach($projects as $project)
-                                    <option value="{{ $project->id }}">{{ $project->name }}</option>
-                                @endforeach
-                            </select>
+                            <div class="form-group">
+                                <label for="project_id">پروژه <span class="text-danger">*</span></label>
+                                <select name="project_id" id="project_id" class="form-control" required="">
+                                    <option value="">انتخاب کنید...</option>
+                                    @foreach($projects as $project)
+                                        <option value="{{ $project->id }}">{{ $project->name }}</option>
+                                    @endforeach
+                                </select>
+                                <span class="invalid-feedback d-block error-type"></span>
+                            </div>
                         </div>
 
                         <!-- تاریخ‌ها -->
