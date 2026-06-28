@@ -22,7 +22,7 @@ class UpdateController extends Controller
         $customer = Customer::where('update_code', $token)->first();
 
         if (!$customer || $customer->status !== 'active') {
-            return response()->json(['error' => 'شماره سفارش'], 403);
+            return response()->json(['error' => 'شماره سفارش نامعتبر است'], 403);
         }
 
         // ===== فیلتر دامنه =====
