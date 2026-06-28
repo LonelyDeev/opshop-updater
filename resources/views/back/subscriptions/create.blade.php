@@ -5,7 +5,7 @@
 @section('content')
     <div class="container-fluid">
         <div class="card shadow w-75 mx-auto">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header bg-primary text-white p-1">
                 <h5 class="mb-0">ثبت اشتراک جدید</h5>
             </div>
             <div class="card-body">
@@ -65,21 +65,28 @@
 
                         <!-- وضعیت‌ها -->
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">وضعیت پرداخت *</label>
-                            <select name="payment_status" class="form-select" required>
-                                <option value="pending">در انتظار پرداخت</option>
-                                <option value="paid">پرداخت شده</option>
-                                <option value="failed">ناموفق</option>
-                            </select>
+                            <div class="form-group">
+                                <label for="payment_status">وضعیت پرداخت <span class="text-danger">*</span></label>
+                                <select name="payment_status" id="payment_status" class="form-control" required="">
+                                    <option value="pending">در انتظار پرداخت</option>
+                                    <option value="paid">پرداخت شده</option>
+                                    <option value="failed">ناموفق</option>
+                                </select>
+                                <span class="invalid-feedback d-block error-type"></span>
+                            </div>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">وضعیت اشتراک *</label>
-                            <select name="status" class="form-select" required>
-                                <option value="active">فعال</option>
-                                <option value="inactive">غیرفعال</option>
-                                <option value="expired">منقضی شده</option>
-                            </select>
+                            <div class="form-group">
+                                <label for="status">وضعیت اشتراک <span class="text-danger">*</span></label>
+                                <select name="status" id="status" class="form-control" required="">
+                                    <option value="active">فعال</option>
+                                    <option value="inactive">غیرفعال</option>
+                                    <option value="expired">منقضی شده</option>
+                                </select>
+                                <span class="invalid-feedback d-block error-type"></span>
+                            </div>
                         </div>
+
 
                         <div class="col-12 mb-3">
                             <label class="form-label">توضیحات</label>
