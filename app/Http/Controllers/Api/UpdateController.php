@@ -34,7 +34,7 @@ class UpdateController extends Controller
 
         if (!$this->isDomainAllowed($allowedDomain, $requestFullDomain, $requestDomain)) {
             return response()->json([
-                'error' => 'Access denied from this domain',
+                'error' => 'دسترسی از این دامنه مجاز نیست',
                 'allowed' => $allowedDomain,
                 'current' => $requestFullDomain
             ], 403);
@@ -49,7 +49,7 @@ class UpdateController extends Controller
             })->exists();
 
         if (!$hasActiveSubscription) {
-            return response()->json(['error' => 'No active subscription'], 403);
+            return response()->json(['error' => 'اشتراک فعالی وجود ندارد'], 403);
         }
 
         // پیدا کردن آخرین آپدیت منتشر شده برای پروژه‌های این مشتری
@@ -92,7 +92,7 @@ class UpdateController extends Controller
 
         $customer = Customer::where('update_code', $token)->first();
         if (!$customer || $customer->status !== 'active') {
-            abort(403, 'Unauthorized');
+            abort(403, 'دسترسی غیرمجاز');
         }
 
         // ===== فیلتر دامنه =====
@@ -104,7 +104,7 @@ class UpdateController extends Controller
 
         if (!$this->isDomainAllowed($allowedDomain, $requestFullDomain, $requestDomain)) {
             return response()->json([
-                'error' => 'Access denied from this domain',
+                'error' => 'دسترسی از این دامنه مجاز نیست',
                 'allowed' => $allowedDomain,
                 'current' => $requestFullDomain
             ], 403);
@@ -115,7 +115,7 @@ class UpdateController extends Controller
 
         // ✅ از دیسک local استفاده کن (مسیر storage/app/private)
         if (!Storage::disk('local')->exists($update->download_link)) {
-            abort(404, 'File not found');
+            abort(404, 'فایل یافت نشد');
         }
 
         // ✅ همان دیسک local برای دانلود

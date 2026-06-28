@@ -215,7 +215,7 @@
                                     <!-- Download Link -->
                                     <div class="form-group">
                                         <label for="download_link">لینک دانلود (اختیاری)</label>
-                                        <input type="url"
+                                        <input type="text"
                                                name="download_link"
                                                id="download_link"
                                                class="form-control"

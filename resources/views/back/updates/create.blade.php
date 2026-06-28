@@ -164,7 +164,7 @@
                                     <!-- Download Link -->
                                     <div class="form-group">
                                         <label for="download_link">لینک دانلود (اختیاری)</label>
-                                        <input type="url" name="download_link" id="download_link" class="form-control"
+                                        <input type="text" name="download_link" id="download_link" class="form-control"
                                                value="{{ old('download_link') }}" placeholder="https://example.com/downloads/update.zip">
                                         <span class="invalid-feedback d-block error-download_link"></span>
                                         <small class="form-text text-muted">در صورت آپلود فایل، این فیلد نادیده گرفته می‌شود</small>
