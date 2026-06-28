@@ -23,8 +23,6 @@
                             <th>پروژه</th>
                             <th>تاریخ شروع</th>
                             <th>تاریخ انقضا</th>
-                            <th>قیمت (تومان)</th>
-                            <th>تخفیف</th>
                             <th>مبلغ نهایی</th>
                             <th>وضعیت پرداخت</th>
                             <th>وضعیت اشتراک</th>
@@ -44,8 +42,6 @@
                                         <span class="badge bg-danger ms-1">منقضی</span>
                                     @endif
                                 </td>
-                                <td>{{ number_format($sub->price) }}</td>
-                                <td class="text-success">{{ number_format($sub->discount) }}</td>
                                 <td class="fw-bold">{{ number_format($sub->final_amount) }}</td>
                                 <td>
                                     @if($sub->payment_status == 'paid')
