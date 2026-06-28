@@ -89,11 +89,42 @@ class UpdateController extends Controller
     public function download(Request $request, $updateId)
     {
         $token = $request->input('token');
+        $currentVersion = $request->input('version'); // مثلا 1.0.0
 
+        // اعتبارسنجی مشتری و اشتراک
         $customer = Customer::where('update_code', $token)->first();
+
         if (!$customer || $customer->status !== 'active') {
-            abort(403, 'دسترسی غیرمجاز');
+            return response()->json(['error' => 'شماره سفارش نامعتبر است'], 403);
         }
+
+        // ===== فیلتر دامنه =====
+        $allowedDomain = $customer->website_url;
+        $requestDomain = $request->getHost(); // دامنه درخواست فعلی
+
+// اگر درخواست از localhost یا IP باشد، ممکن است پورت هم داشته باشد
+        $requestFullDomain = $request->getHttpHost(); // شامل پورت: example.com:8080
+
+        if (!$this->isDomainAllowed($allowedDomain, $requestFullDomain, $requestDomain)) {
+            return response()->json([
+                'error' => 'دسترسی از این دامنه مجاز نیست',
+                'allowed' => $allowedDomain,
+                'current' => $requestFullDomain
+            ], 403);
+        }
+
+
+        $hasActiveSubscription = $customer->subscriptions()
+            ->where('status', 'active')
+            ->where('payment_status', 'paid')
+            ->where(function($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })->exists();
+
+        if (!$hasActiveSubscription) {
+            return response()->json(['error' => 'اشتراک فعالی وجود ندارد'], 403);
+        }
+
 
         // ===== فیلتر دامنه =====
         $allowedDomain = $customer->website_url;

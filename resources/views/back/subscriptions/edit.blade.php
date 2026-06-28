@@ -5,7 +5,7 @@
 @section('content')
     <div class="container-fluid">
         <div class="card shadow w-75 mx-auto">
-            <div class="card-header bg-warning text-dark">
+            <div class="card-header bg-warning text-dark p-1">
                 <h5 class="mb-0">ویرایش اشتراک</h5>
             </div>
             <div class="card-body">
