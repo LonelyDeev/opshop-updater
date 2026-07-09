@@ -27,6 +27,35 @@
                 </a>
             </li>
 
+            <li class="menu-title">پکیج‌ها</li>
+
+            {{-- لیست پکیج‌ها (شامل نسخه‌ها و طرح‌های قیمت) --}}
+            <li>
+                <a href="{{ route('admin.packages.index') }}"
+                   class="{{ (request()->routeIs('admin.packages.index') || request()->routeIs('admin.packages.create') || request()->routeIs('admin.packages.show') || request()->routeIs('admin.packages.edit') || request()->routeIs('admin.packages.versions.*') || request()->routeIs('admin.packages.plans.*')) ? 'active' : '' }}">
+                    <i>📦</i>
+                    <span>لیست پکیج‌ها</span>
+                </a>
+            </li>
+
+            {{-- لایسنس‌ها --}}
+            <li>
+                <a href="{{ route('admin.packages.licenses.index') }}"
+                   class="{{ request()->routeIs('admin.packages.licenses.*') ? 'active' : '' }}">
+                    <i>🔑</i>
+                    <span>لایسنس‌ها</span>
+                </a>
+            </li>
+
+            {{-- خریدها --}}
+            <li>
+                <a href="{{ route('admin.packages.purchases.index') }}"
+                   class="{{ request()->routeIs('admin.packages.purchases.*') ? 'active' : '' }}">
+                    <i>🛒</i>
+                    <span>خریدها</span>
+                </a>
+            </li>
+
             <li class="menu-title">مشتریان</li>
             <li>
                 <a href="{{ route('admin.customers.index') }}" class="{{ request()->routeIs('admin.customers.*') ? 'active' : '' }}">
