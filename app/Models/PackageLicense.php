@@ -32,7 +32,7 @@ class PackageLicense extends Model
 
     public function package(): BelongsTo
     {
-        return $this->belongsTo(Package::class);
+        return $this->belongsTo(Package::class, 'package_id');
     }
 
     public function customer(): BelongsTo

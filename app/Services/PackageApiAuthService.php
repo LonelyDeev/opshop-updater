@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\PackageLicense;
 use Illuminate\Http\Request;
 use RuntimeException;
 
@@ -77,10 +78,10 @@ class PackageApiAuthService
     /**
      * دریافت لایسنس فعال مشتری برای یک پکیج
      */
-    public function getActiveLicense(Customer $customer, string $packageSlug): ?\App\Models\PackageLicense
+    public function getActiveLicense(Customer $customer, string $packageSlug): ?PackageLicense
     {
-        return \App\Models\PackageLicense::where('customer_id', $customer->id)
-            ->where('status', \App\Models\PackageLicense::STATUS_ACTIVE)
+        return PackageLicense::where('customer_id', $customer->id)
+            ->where('status', PackageLicense::STATUS_ACTIVE)
             ->whereHas('package', fn ($q) => $q->where('slug', $packageSlug))
             ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
