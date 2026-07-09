@@ -24,7 +24,7 @@ class PackageImage extends Model
         'sort_order' => 'integer',
         'is_active'  => 'boolean',
     ];
-
+    protected $appends = ['url'];
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
