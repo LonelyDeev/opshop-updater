@@ -9,7 +9,7 @@ Route::prefix('v1')->name('api.')->group(function () {
     Route::get('/check-update', [UpdateController::class, 'check'])->name('update.check');
     Route::get('/download-update/{updateId}', [UpdateController::class, 'download'])->name('update.download');
 
-    Route::prefix('v1')->name('api.packages.')->group(function () {
+    Route::name('packages.')->group(function () {
 
         // --- لیست و جزئیات ---
         Route::get('/packages', [ApiPackageController::class, 'index'])->name('index');
