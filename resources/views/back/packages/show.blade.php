@@ -9,21 +9,21 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
-                            <i class="fas fa-package"></i> {{ $package->name }}
+                            <i class="feather icon-package"></i> {{ $package->name }}
                             <span class="badge bg-light text-dark ms-2">{{ $package->slug }}</span>
                         </h5>
                         <div class="d-flex gap-1">
                             <a href="{{ route('admin.packages.versions.create', $package) }}" class="btn btn-sm btn-success">
-                                <i class="fas fa-upload-cloud"></i> آپلود نسخه جدید
+                                <i class="feather icon-upload-cloud"></i> آپلود نسخه جدید
                             </a>
                             <a href="{{ route('admin.packages.plans.create', $package) }}" class="btn btn-sm btn-warning">
-                                <i class="fas fa-tag"></i> طرح قیمت
+                                <i class="feather icon-tag"></i> طرح قیمت
                             </a>
                             <a href="{{ route('admin.packages.edit', $package) }}" class="btn btn-sm btn-primary">
-                                <i class="fas fa-edit-2"></i> ویرایش
+                                <i class="feather icon-edit-2"></i> ویرایش
                             </a>
                             <a href="{{ route('admin.packages.index') }}" class="btn btn-sm btn-secondary">
-                                <i class="fas fa-arrow-right"></i>
+                                <i class="feather icon-arrow-right"></i>
                             </a>
                         </div>
                     </div>
@@ -32,7 +32,7 @@
                         {{-- اطلاعات کلی --}}
                         <div class="row mb-4">
                             <div class="col-md-3 text-center">
-                                <img src="{{ asset($package->thumbnail_url) }}" class="img-thumbnail" style="max-height: 200px; object-fit: cover; width: 100%;">
+                                <img src="{{ $package->thumbnail_url }}" class="img-thumbnail" style="max-height: 200px; object-fit: cover; width: 100%;">
                                 <small class="text-muted d-block mt-1">تصویر شاخص</small>
                             </div>
                             <div class="col-md-9">
@@ -87,12 +87,12 @@
                         {{-- گالری تصاویر --}}
                         @if ($package->images->count())
                             <div class="mb-4">
-                                <h6 class="mb-2"><i class="fas fa-grid"></i> گالری تصاویر ({{ $package->images->count() }})</h6>
+                                <h6 class="mb-2"><i class="feather icon-grid"></i> گالری تصاویر ({{ $package->images->count() }})</h6>
                                 <div class="row g-2">
                                     @foreach ($package->images as $image)
-                                        <div class="col-6 col-md-3 col-lg-2 mb-1">
-                                            <a href="{{ asset($image->url)}}" target="_blank">
-                                                <img src="{{ asset($image->url)}}" class="img-thumbnail w-100"
+                                        <div class="col-6 col-md-3 col-lg-2">
+                                            <a href="{{ $image->url }}" target="_blank">
+                                                <img src="{{ $image->url }}" class="img-thumbnail w-100"
                                                      style="height: 120px; object-fit: cover;" title="{{ $image->alt ?: $image->original_name }}">
                                             </a>
                                         </div>
@@ -103,7 +103,7 @@
 
                         {{-- آخرین نسخه‌ها --}}
                         <h6 class="mb-2">
-                            <i class="fas fa-git-branch"></i> نسخه‌ها ({{ $package->versions->count() }})
+                            <i class="feather icon-git-branch"></i> نسخه‌ها ({{ $package->versions->count() }})
                             <a href="{{ route('admin.packages.versions.index', $package) }}" class="btn btn-sm btn-link">همه →</a>
                         </h6>
                         <div class="table-responsive mb-4">
@@ -136,7 +136,7 @@
                                         </td>
                                         <td class="text-center">
                                             @if ($version->is_mandatory)
-                                                <i class="fas fa-alert-triangle text-danger"></i>
+                                                <i class="feather icon-alert-triangle text-danger"></i>
                                             @else — @endif
                                         </td>
                                         <td class="text-center"><small>{{ $version->file_size_human }}</small></td>
@@ -160,7 +160,7 @@
 
                         {{-- طرح‌های قیمت‌گذاری --}}
                         <h6 class="mb-2">
-                            <i class="fas fa-tag"></i> طرح‌های قیمت‌گذاری ({{ $package->pricingPlans->count() }})
+                            <i class="feather icon-tag"></i> طرح‌های قیمت‌گذاری ({{ $package->pricingPlans->count() }})
                             <a href="{{ route('admin.packages.plans.index', $package) }}" class="btn btn-sm btn-link">مدیریت →</a>
                         </h6>
                         <div class="table-responsive mb-4">
@@ -178,7 +178,17 @@
                                 <tbody>
                                 @foreach ($package->pricingPlans as $plan)
                                     <tr>
-                                        <td>{{ $plan->name }}</td>
+                                        <td>
+                                            {{ $plan->name }}
+                                            @if ($plan->is_one_time)
+                                                <span class="badge bg-warning text-dark" title="طرح یک‌بار مصرف">
+                                                <i class="feather icon-gift"></i> یک‌بار مصرف
+                                            </span>
+                                            @endif
+                                            @if ($plan->description)
+                                                <br><small class="text-muted">{{ $plan->description }}</small>
+                                            @endif
+                                        </td>
                                         <td class="text-center">{{ $plan->duration_label }}</td>
                                         <td class="text-center">{{ number_format($plan->price) }}</td>
                                         <td class="text-center">
@@ -209,7 +219,7 @@
 
                         {{-- لایسنس‌های اخیر --}}
                         <h6 class="mb-2">
-                            <i class="fas fa-key"></i> لایسنس‌های اخیر
+                            <i class="feather icon-key"></i> لایسنس‌های اخیر
                         </h6>
                         <div class="table-responsive">
                             <table class="table table-sm table-hover">

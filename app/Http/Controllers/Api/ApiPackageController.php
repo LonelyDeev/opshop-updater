@@ -54,7 +54,6 @@ class ApiPackageController extends Controller
                 ->orderByDesc('created_at')
                 ->paginate($request->input('per_page', 15));
 
-
             return response()->json([
                 'data' => $packages->items(),
                 'meta' => [
@@ -152,6 +151,13 @@ class ApiPackageController extends Controller
 
             if (!$plan) {
                 return response()->json(['error' => 'طرح قیمت‌گذاری نامعتبر است.'], 422);
+            }
+
+            // جلوگیری از خرید مجدد طرح‌های یک‌بار مصرف
+            if ($plan->is_one_time && $plan->hasCustomerUsed($customer->id)) {
+                return response()->json([
+                    'error' => 'شما قبلاً از این طرح استفاده کرده‌اید. این طرح فقط یک‌بار قابل خریداری است. لطفاً طرح دیگری انتخاب کنید.',
+                ], 422);
             }
 
             $latestVersion = $package->latestVersion();
@@ -318,6 +324,16 @@ class ApiPackageController extends Controller
             $result = $this->licenseService->verify($license);
 
             if (!$result['valid']) {
+                // اگه لایسنس منقضی شده و از طرح one-time بوده، پیام واضح بده
+                $plan = $license->purchase?->pricingPlan;
+                if ($plan && $plan->is_one_time) {
+                    return response()->json([
+                        'valid'        => false,
+                        'message'      => 'لایسنس این طرح (یک‌بار مصرف) منقضی شده است. این طرح قابل تمدید نیست. لطفاً طرح دیگری خریداری کنید.',
+                        'is_one_time'  => true,
+                        'expires_at'   => $result['expires_at'] ?? null,
+                    ]);
+                }
                 return response()->json($result);
             }
 
@@ -381,7 +397,6 @@ class ApiPackageController extends Controller
                 'what_added'      => $latestVersion->what_added,
                 'what_changed'    => $latestVersion->what_changed,
                 'what_fixed'      => $latestVersion->what_fixed,
-                'min_project_version'    => $latestVersion->min_project_version,
                 'min_php_version'    => $latestVersion->min_php_version,
                 'min_laravel_version'=> $latestVersion->min_laravel_version,
                 'dependencies'       => $latestVersion->dependencies,

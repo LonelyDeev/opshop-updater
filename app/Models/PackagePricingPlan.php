@@ -14,7 +14,7 @@ class PackagePricingPlan extends Model
 
     protected $fillable = [
         'package_id', 'name', 'duration_months', 'price',
-        'discount_price', 'is_active', 'sort_order',
+        'discount_price', 'is_one_time', 'description', 'is_active', 'sort_order',
     ];
 
     protected $casts = [
@@ -22,6 +22,7 @@ class PackagePricingPlan extends Model
         'price'           => 'integer',
         'discount_price'  => 'integer',
         'is_active'       => 'boolean',
+        'is_one_time'     => 'boolean',
         'sort_order'      => 'integer',
     ];
 
@@ -64,5 +65,28 @@ class PackagePricingPlan extends Model
         }
         $years = $this->duration_months / 12;
         return ($years == floor($years) ? (int) $years : $years) . ' سال';
+    }
+
+    /**
+     * آیا این طرح یک‌بار مصرف است؟
+     */
+    public function isOneTime(): bool
+    {
+        return $this->is_one_time;
+    }
+
+    /**
+     * بررسی اینکه آیا مشتری قبلاً این طرح one-time را خریده است یا خیر
+     */
+    public function hasCustomerUsed(int $customerId): bool
+    {
+        if (!$this->is_one_time) {
+            return false;
+        }
+
+        return PackagePurchase::where('customer_id', $customerId)
+            ->where('pricing_plan_id', $this->id)
+            ->where('status', PackagePurchase::STATUS_PAID)
+            ->exists();
     }
 }

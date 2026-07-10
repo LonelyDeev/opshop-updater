@@ -67,6 +67,8 @@ return new class extends Migration
             $table->unsignedSmallInteger('duration_months')->default(0);
             $table->unsignedBigInteger('price')->default(0);
             $table->unsignedBigInteger('discount_price')->nullable();
+            $table->boolean('is_one_time')->default(false);
+            $table->text('description')->nullable();
             $table->boolean('is_active')->default(true);
             $table->integer('sort_order')->default(0);
             $table->timestamps();

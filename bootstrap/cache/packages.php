@@ -41,4 +41,15 @@
       0 => 'Termwind\\Laravel\\TermwindServiceProvider',
     ),
   ),
+  'shetabit/payment' => 
+  array (
+    'aliases' => 
+    array (
+      'Payment' => 'Shetabit\\Payment\\Facade\\Payment',
+    ),
+    'providers' => 
+    array (
+      0 => 'Shetabit\\Payment\\Provider\\PaymentServiceProvider',
+    ),
+  ),
 );

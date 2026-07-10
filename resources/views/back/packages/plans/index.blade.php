@@ -9,21 +9,21 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
-                            <i class="fas fa-tag"></i> طرح‌های قیمت‌گذاری: {{ $package->name }}
+                            <i class="feather icon-tag"></i> طرح‌های قیمت‌گذاری: {{ $package->name }}
                         </h5>
                         <div class="d-flex gap-1">
                             <a href="{{ route('admin.packages.plans.create', $package) }}" class="btn btn-sm btn-success">
-                                <i class="fas fa-plus"></i> طرح جدید
+                                <i class="feather icon-plus"></i> طرح جدید
                             </a>
                             <a href="{{ route('admin.packages.show', $package) }}" class="btn btn-sm btn-secondary">
-                                <i class="fas fa-arrow-right"></i> بازگشت
+                                <i class="feather icon-arrow-right"></i> بازگشت
                             </a>
                         </div>
                     </div>
                     <div class="card-body">
 
                         <div class="alert alert-info">
-                            <i class="fas fa-info"></i>
+                            <i class="feather icon-info"></i>
                             برای هر پکیج می‌توانید چندین طرح قیمت‌گذاری تعریف کنید.
                             مثلاً: 6 ماهه با 100,000 تومان، 12 ماهه با 180,000 تومان، نامحدود با 500,000 تومان.
                             هر طرح می‌تواند تخفیف جداگانه داشته باشد.
@@ -49,7 +49,17 @@
                                     @foreach ($plans as $plan)
                                         <tr>
                                             <td>{{ $plan->id }}</td>
-                                            <td><strong>{{ $plan->name }}</strong></td>
+                                            <td>
+                                                <strong>{{ $plan->name }}</strong>
+                                                @if ($plan->is_one_time)
+                                                    <span class="badge bg-warning text-dark ms-1" title="طرح یک‌بار مصرف">
+                                                <i class="feather icon-gift"></i> یک‌بار مصرف
+                                            </span>
+                                                @endif
+                                                @if ($plan->description)
+                                                    <br><small class="text-muted">{{ $plan->description }}</small>
+                                                @endif
+                                            </td>
                                             <td class="text-center"><span class="badge bg-info">{{ $plan->duration_label }}</span></td>
                                             <td class="text-center">{{ number_format($plan->price) }} تومان</td>
                                             <td class="text-center">
@@ -79,7 +89,7 @@
                                                       method="POST" class="d-inline" onsubmit="return confirm('حذف طرح؟')">
                                                     @csrf @method('DELETE')
                                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
-                                                        <i class="fas fa-trash"></i>
+                                                        <i class="feather icon-trash-2"></i>
                                                     </button>
                                                 </form>
                                             </td>
@@ -90,10 +100,10 @@
                             </div>
                         @else
                             <div class="text-center py-5 text-muted">
-                                <i class="fas fa-tag" style="font-size: 3rem;"></i>
+                                <i class="feather icon-tag" style="font-size: 3rem;"></i>
                                 <p class="mt-3">هنوز طرحی تعریف نشده.</p>
                                 <a href="{{ route('admin.packages.plans.create', $package) }}" class="btn btn-success">
-                                    <i class="fas fa-plus"></i> ایجاد اولین طرح
+                                    <i class="feather icon-plus"></i> ایجاد اولین طرح
                                 </a>
                             </div>
                         @endif

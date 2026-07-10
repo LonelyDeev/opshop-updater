@@ -22,7 +22,7 @@
                             <div class="mb-3">
                                 <label class="form-label">نام طرح <span class="text-danger">*</span></label>
                                 <input type="text" name="name" value="{{ old('name') }}"
-                                       class="form-control" placeholder="مثلاً: طرح 6 ماهه" required>
+                                       class="form-control" placeholder="مثلاً: طرح 6 ماهه یا طرح تست رایگان" required>
                                 <small class="text-muted">این نام به مشتری نمایش داده می‌شود.</small>
                             </div>
 
@@ -61,6 +61,38 @@
                                 </div>
                             </div>
 
+                            {{-- توضیحات طرح --}}
+                            <div class="mb-3">
+                                <label class="form-label">توضیحات طرح</label>
+                                <textarea name="description" rows="2" class="form-control" placeholder="مثلاً: طرح تست رایگان برای آشنایی با پکیج">{{ old('description') }}</textarea>
+                                <small class="text-muted">به مشتری نمایش داده می‌شود (اختیاری).</small>
+                            </div>
+
+                            {{-- چک‌باکس طرح یک‌بار مصرف --}}
+                            <div class="card mb-3 @if(old('is_one_time')) border-warning @endif" id="one-time-card">
+                                <div class="card-body">
+                                    <div class="form-check">
+                                        <input type="checkbox" name="is_one_time" value="1" class="form-check-input"
+                                               id="is_one_time" @if(old('is_one_time')) checked @endif>
+                                        <label for="is_one_time" class="form-check-label fw-bold">
+                                            <i class="fas fa-gift text-warning"></i>
+                                            طرح یک‌بار مصرف (غیرقابل تمدید)
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-2">
+                                        اگر فعال باشد، مشتری فقط <strong>یک بار</strong> می‌تواند این طرح را خریداری کند.
+                                        مناسب برای <strong>طرح‌های تست رایگان</strong> یا طرح‌های ویژه که قرار نیست قابل تمدید باشند.
+                                        وقتی مدت آن تمام شود، مشتری باید طرح دیگری انتخاب کند.
+                                    </small>
+                                    <div class="alert alert-warning mt-2 mb-0 d-none" id="one-time-alert">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <strong>توجه:</strong>
+                                        مشتری پس از پایان مدت این طرح، <strong>نمی‌تواند آن را تمدید کند</strong>.
+                                        برای ادامه استفاده از پکیج باید طرح دیگری خریداری نماید.
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="alert alert-info">
                                 <i class="fas fa-info"></i>
                                 <strong>نکته:</strong>
@@ -79,4 +111,24 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // نمایش/مخفی کردن هشدار طرح یک‌بار مصرف
+        const oneTimeCheckbox = document.getElementById('is_one_time');
+        const oneTimeAlert = document.getElementById('one-time-alert');
+        const oneTimeCard = document.getElementById('one-time-card');
+
+        function toggleOneTimeAlert() {
+            if (oneTimeCheckbox.checked) {
+                oneTimeAlert.classList.remove('d-none');
+                oneTimeCard.classList.add('border-warning', 'bg-light');
+            } else {
+                oneTimeAlert.classList.add('d-none');
+                oneTimeCard.classList.remove('border-warning', 'bg-light');
+            }
+        }
+
+        oneTimeCheckbox.addEventListener('change', toggleOneTimeAlert);
+        toggleOneTimeAlert(); // برای حالت old
+    </script>
 @endsection

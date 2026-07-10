@@ -27,12 +27,16 @@ class PackagePricingPlanController extends Controller
             'duration_months' => 'required|integer|min:0|max:120',
             'price'           => 'required|integer|min:0',
             'discount_price'  => 'nullable|integer|min:0|lt:price',
+            'is_one_time'     => 'boolean',
+            'description'     => 'nullable|string|max:500',
             'is_active'       => 'boolean',
             'sort_order'      => 'nullable|integer|min:0',
         ]);
 
         $validated['is_active'] = $request->has('is_active');
+        $validated['is_one_time'] = $request->has('is_one_time');
         $validated['discount_price'] = $validated['discount_price'] ?? null;
+        $validated['description'] = $validated['description'] ?? null;
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
 
         $package->pricingPlans()->create($validated);
@@ -53,12 +57,16 @@ class PackagePricingPlanController extends Controller
             'duration_months' => 'required|integer|min:0|max:120',
             'price'           => 'required|integer|min:0',
             'discount_price'  => 'nullable|integer|min:0|lt:price',
+            'is_one_time'     => 'boolean',
+            'description'     => 'nullable|string|max:500',
             'is_active'       => 'boolean',
             'sort_order'      => 'nullable|integer|min:0',
         ]);
 
         $validated['is_active'] = $request->has('is_active');
+        $validated['is_one_time'] = $request->has('is_one_time');
         $validated['discount_price'] = $validated['discount_price'] ?? null;
+        $validated['description'] = $validated['description'] ?? null;
 
         $plan->update($validated);
 
