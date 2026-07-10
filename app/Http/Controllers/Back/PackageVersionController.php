@@ -26,6 +26,7 @@ class PackageVersionController extends Controller
 
     public function store(Request $request, Package $package)
     {
+
         $validated = $request->validate([
             'version'            => 'required|string|max:50|unique:package_versions,version,NULL,id,package_id,' . $package->id,
             'type'               => 'required|in:major,minor,patch',
@@ -38,8 +39,8 @@ class PackageVersionController extends Controller
             'min_php_version'    => 'nullable|string|max:20',
             'min_laravel_version'=> 'nullable|string|max:20',
             'dependencies'       => 'nullable|array',
-            'dependencies.*.slug'    => 'required_with:dependencies|string',
-            'dependencies.*.version' => 'required_with:dependencies|string',
+            'dependencies.*.slug'    => 'nullable|string',
+            'dependencies.*.version' => 'nullable|string',
             'is_mandatory'       => 'boolean',
             'status'             => 'required|in:draft,active,archived',
             'release_date'       => 'nullable|date',
@@ -57,9 +58,15 @@ class PackageVersionController extends Controller
         // پردازش dependencies
         $dependencies = null;
         if (!empty($validated['dependencies'])) {
-            $dependencies = [];
-            foreach ($validated['dependencies'] as $dep) {
-                if (!empty($dep['slug'])) {
+            // فیلتر کردن آیتم‌های خالی
+            $filtered = array_filter($validated['dependencies'], function($dep) {
+                return !empty($dep['slug']) && !empty($dep['version']);
+            });
+
+            // تبدیل به فرمت مورد نظر
+            if (!empty($filtered)) {
+                $dependencies = [];
+                foreach ($filtered as $dep) {
                     $dependencies[$dep['slug']] = $dep['version'];
                 }
             }

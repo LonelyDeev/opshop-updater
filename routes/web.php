@@ -17,6 +17,9 @@ use App\Http\Controllers\Back\PackagePricingPlanController;
 use App\Http\Controllers\Back\PackageLicenseController;
 use App\Http\Controllers\Back\PackagePurchaseController;
 
+Route::get('/',function(){
+    return redirect('/admin');
+});
 Route::get('get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
 Auth::routes();
 

@@ -19,6 +19,18 @@
                     <form action="{{ route('admin.packages.versions.store', $package) }}" method="POST" enctype="multipart/form-data">
                         @csrf
 
+                        @if ($errors->any())
+                            <div class="mt-3">
+                                <div class="alert alert-danger">
+                                    <ul class="mb-0">
+                                        @foreach ($errors->all() as $error)
+                                            <li>{{ $error }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            </div>
+                        @endif
+
                         <div class="row">
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">شماره نسخه <span class="text-danger">*</span></label>
