@@ -380,7 +380,6 @@ class ApiPackageController extends Controller
             if (!$package) {
                 return response()->json(['error' => 'پکیج یافت نشد.'], 404);
             }
-
             $latestVersion = $package->latestVersion()->first();
 
             if (!$latestVersion) {
