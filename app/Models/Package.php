@@ -51,9 +51,7 @@ class Package extends Model
 
     public function latestVersion()
     {
-        return $this->hasOne(PackageVersion::class)
-            ->where('status', PackageVersion::STATUS_ACTIVE)
-            ->latest('id');
+        return $this->hasOne(PackageVersion::class)->where('status', PackageVersion::STATUS_ACTIVE)->latest('id');
     }
 
     public function pricingPlans(): HasMany

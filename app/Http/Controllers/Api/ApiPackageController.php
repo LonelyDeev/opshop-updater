@@ -160,7 +160,8 @@ class ApiPackageController extends Controller
                 ], 422);
             }
 
-            $latestVersion = $package->latestVersion();
+            $latestVersion = $package->latestVersion()->first();
+
             if (!$latestVersion) {
                 return response()->json(['error' => 'نسخه فعالی برای این پکیج وجود ندارد.'], 422);
             }
@@ -337,8 +338,11 @@ class ApiPackageController extends Controller
                 return response()->json($result);
             }
 
-            $latestVersion = $package->latestVersion();
+            $latestVersion = $package->latestVersion()->first();
 
+            if (!$latestVersion) {
+                return response()->json(['error' => 'نسخه فعالی برای این پکیج وجود ندارد.'], 422);
+            }
             return response()->json([
                 'valid'         => true,
                 'expires_at'    => $result['expires_at'],
@@ -377,7 +381,7 @@ class ApiPackageController extends Controller
                 return response()->json(['error' => 'پکیج یافت نشد.'], 404);
             }
 
-            $latestVersion = $package->latestVersion();
+            $latestVersion = $package->latestVersion()->first();
 
             if (!$latestVersion) {
                 return response()->json([
