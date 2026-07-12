@@ -19,7 +19,17 @@
                         <form action="{{ route('admin.packages.versions.update', [$package, $version]) }}"
                               method="POST" enctype="multipart/form-data">
                             @csrf @method('PUT')
-
+                            @if ($errors->any())
+                                <div class="mt-3">
+                                    <div class="alert alert-danger">
+                                        <ul class="mb-0">
+                                            @foreach ($errors->all() as $error)
+                                                <li>{{ $error }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                </div>
+                            @endif
                             <div class="row">
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">شماره نسخه <span class="text-danger">*</span></label>
@@ -113,7 +123,10 @@
                                 <div id="dependencies-container">
                                     @php
                                         $existingDeps = old('dependencies', $version->dependencies ?? []);
-                                        $depIndex = 0;
+                                        $existingDeps = array_filter($existingDeps, function($dep) {
+                                            return !empty($dep['slug']) || !empty($dep['version']);
+                                        });
+                                        $existingDeps = array_values($existingDeps);                                        $depIndex = 0;
                                     @endphp
                                     @if (!empty($existingDeps))
                                         @foreach ($existingDeps as $depSlug => $depVer)
@@ -126,6 +139,7 @@
                                                     $slug = $depSlug;
                                                     $ver = $depVer;
                                                 }
+                                                dd($depIndex,$slug,$ver);
                                             @endphp
                                             <div class="row dep-row mb-2">
                                                 <div class="col-md-5">
