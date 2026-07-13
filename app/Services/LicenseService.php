@@ -19,10 +19,8 @@ class LicenseService
     /**
      * صدور لایسنس پس از پرداخت موفق
      */
-    public function issueLicense(
-        PackagePurchase $purchase,
-        PackagePricingPlan $plan
-    ): PackageLicense {
+    public function issueLicense(PackagePurchase $purchase,PackagePricingPlan $plan): PackageLicense {
+
         return DB::transaction(function () use ($purchase, $plan) {
             $startsAt = now();
             $expiresAt = $plan->duration_months > 0
@@ -51,11 +49,7 @@ class LicenseService
      * تمدید لایسنس (برای لایسنس‌های منقضی یا در حال انقضا)
      * لایسنس جدید ساخته می‌شود و renewed_from به لایسنس قبلی اشاره می‌کند
      */
-    public function renewLicense(
-        PackageLicense $oldLicense,
-        PackagePurchase $newPurchase,
-        PackagePricingPlan $plan
-    ): PackageLicense {
+    public function renewLicense(PackageLicense $oldLicense,PackagePurchase $newPurchase,PackagePricingPlan $plan): PackageLicense {
         // جلوگیری از تمدید طرح‌های یک‌بار مصرف
         if ($plan->is_one_time) {
             throw new RuntimeException(

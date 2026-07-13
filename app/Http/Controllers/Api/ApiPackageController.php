@@ -177,9 +177,7 @@ class ApiPackageController extends Controller
                     'status'          => PackagePurchase::STATUS_PAID,
                     'paid_at'         => now(),
                 ]);
-
                 $license = $this->licenseService->issueLicense($purchase, $plan);
-
                 return response()->json([
                     'is_free'      => true,
                     'license_key'  => $license->license_key,
@@ -187,7 +185,6 @@ class ApiPackageController extends Controller
                     'download_token' => $this->createDownloadToken($license, $latestVersion, $customer),
                 ]);
             }
-
             // ایجاد رکورد purchase
             $purchase = PackagePurchase::create([
                 'package_id'      => $package->id,
@@ -210,7 +207,7 @@ class ApiPackageController extends Controller
                 'purchase_id'    => $purchase->id,
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 

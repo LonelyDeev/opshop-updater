@@ -82,7 +82,7 @@ return new class extends Migration
             $table->string('license_key', 64)->unique();
             $table->foreignId('package_id')->constrained()->cascadeOnDelete();
             $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
-            // حذف شد: $table->foreignId('purchase_id')->nullable()->constrained('package_purchases')->nullOnDelete();
+            $table->foreignId('purchase_id')->nullable()->constrained('package_purchases')->nullOnDelete();
             $table->foreignId('renewed_from')->nullable()->constrained('package_licenses')->nullOnDelete();
             $table->string('status', 20)->default('active');
             $table->timestamp('starts_at')->nullable();

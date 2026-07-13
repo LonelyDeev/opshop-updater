@@ -139,7 +139,6 @@
                                                     $slug = $depSlug;
                                                     $ver = $depVer;
                                                 }
-                                                dd($depIndex,$slug,$ver);
                                             @endphp
                                             <div class="row dep-row mb-2">
                                                 <div class="col-md-5">
