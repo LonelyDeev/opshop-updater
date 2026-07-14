@@ -11,6 +11,7 @@ Route::prefix('v1')->name('api.')->group(function () {
 
     Route::name('packages.')->group(function () {
 
+
         // --- لیست و جزئیات ---
         Route::get('/packages', [ApiPackageController::class, 'index'])->name('index');
         Route::get('/packages/{slug}', [ApiPackageController::class, 'show'])->name('show');
@@ -31,8 +32,10 @@ Route::prefix('v1')->name('api.')->group(function () {
         // --- آپدیت ---
         Route::get('/packages/{slug}/check-update', [ApiPackageController::class, 'checkUpdate'])->name('check-update');
 
+
         // --- دانلود ---
-        Route::get('/packages/download/{token}', [ApiPackageDownloadController::class, 'download'])->name('download');
+        Route::get('/packages/download/{dlToken}', [ApiPackageDownloadController::class, 'download'])->name('download');
+
     });
 
 });

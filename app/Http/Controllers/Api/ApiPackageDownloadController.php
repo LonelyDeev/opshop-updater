@@ -18,13 +18,13 @@ class ApiPackageDownloadController extends Controller
      *  GET /api/v1/packages/download/{token}
      *  دانلود فایل ZIP با token موقت
      * =================================================================== */
-    public function download(Request $request, string $token)
+    public function download(Request $request, string $dlToken)
     {
         try {
             // احراز هویت (مشتری باید لاگین باشه)
             $customer = $this->authService->authenticate($request);
 
-            $downloadToken = PackageDownloadToken::where('token', $token)
+            $downloadToken = PackageDownloadToken::where('token', $dlToken)
                 ->where('customer_id', $customer->id)
                 ->first();
 
@@ -37,7 +37,6 @@ class ApiPackageDownloadController extends Controller
             }
 
             $version = $downloadToken->version;
-
             if (!$version || !Storage::disk('local')->exists($version->file_path)) {
                 return response()->json(['error' => 'فایل پکیج یافت نشد.'], 404);
             }
