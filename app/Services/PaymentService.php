@@ -2,17 +2,13 @@
 
 namespace App\Services;
 
-use App\Models\Customer;
-use App\Models\Package;
-use App\Models\PackagePricingPlan;
 use App\Models\PackagePurchase;
-use App\Models\PackageVersion;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use RuntimeException;
+use Shetabit\Multipay\Exceptions\InvalidPaymentException;
+use Shetabit\Multipay\Invoice;
 use Shetabit\Payment\Facade\Payment;
-use Shetabit\Payment\Invoice;
-use Shetabit\Payment\Models\Transaction;
 
 class PaymentService
 {
@@ -43,24 +39,25 @@ class PaymentService
                 ->detail('pricing_plan_id', $purchase->pricing_plan_id);
 
             // 2️⃣ ایجاد پرداخت با کالبک
-            $payment = Payment::callbackUrl($callbackUrl)->purchase($invoice, function ($transaction, $invoice) use ($purchase) {
-                // این کالبک بعد از ساخت تراکنش اجرا میشه
-                // اطلاعات تراکنش رو در دیتابیس ذخیره میکنیم
-                $purchase->update([
-                    'transaction_id' => $transaction->transactionId ?? $transaction->id,
-                    'gateway'        => $transaction->driver ?? config('payment.default_driver', 'zarinpal'),
-                    'payment_url'    => $transaction->getPaymentUrl() ?? null,
-                ]);
+            $payment = Payment::callbackUrl($callbackUrl)->purchase(
+                $invoice,
+                function ($driver, $transactionId) use ($purchase) {
+                    // ذخیره transactionId در مدل Purchase خودتان
+                    $purchase->update([
+                        'transaction_id' => $transactionId,
+                        'gateway'        => $driver,
+                    ]);
 
-                Log::info('Purchase transaction created', [
-                    'purchase_id' => $purchase->id,
-                    'transaction_id' => $transaction->transactionId ?? $transaction->id,
-                    'gateway' => $transaction->driver ?? 'unknown'
-                ]);
-            });
+                    Log::info('Purchase transaction created', [
+                        'purchase_id'   => $purchase->id,
+                        'transaction_id' => $transactionId,
+                        'gateway'       => $driver,
+                    ]);
+                }
+            );
 
-            // 3️⃣ دریافت تراکنش و آدرس پرداخت
-            $transaction = $payment->getTransaction();
+            // 3️⃣ اجرای پرداخت و دریافت آدرس
+            $payment->pay();
             $paymentUrl = $payment->getPaymentUrl();
 
             if (!$paymentUrl) {
@@ -69,24 +66,22 @@ class PaymentService
 
             // 4️⃣ آپدیت نهایی خرید
             $purchase->update([
-                'transaction_id' => $transaction->transactionId ?? $transaction->id,
-                'gateway'        => $transaction->driver ?? config('payment.default_driver', 'zarinpal'),
-                'payment_url'    => $paymentUrl,
-                'status'         => 'pending',
+                'payment_url' => $paymentUrl,
+                'status'      => 'pending',
             ]);
 
             return [
                 'payment_url'    => $paymentUrl,
-                'transaction_id' => (string) ($transaction->transactionId ?? $transaction->id),
+                'transaction_id' => (string) $purchase->transaction_id,
                 'amount'         => $purchase->amount,
-                'gateway'        => $transaction->driver ?? config('payment.default_driver', 'zarinpal'),
+                'gateway'        => $purchase->gateway ?? 'unknown',
             ];
 
         } catch (\Exception $e) {
             Log::error('Payment creation failed', [
                 'purchase_id' => $purchase->id,
                 'error'       => $e->getMessage(),
-                'trace'       => $e->getTraceAsString()
+                'trace'       => $e->getTraceAsString(),
             ]);
             throw new RuntimeException('ایجاد تراکنش پرداخت ناموفق بود: ' . $e->getMessage());
         }
@@ -100,9 +95,7 @@ class PaymentService
     public function verifyPayment(string $transactionId): array
     {
         // 1️⃣ پیدا کردن خرید بر اساس transaction_id
-        $purchase = PackagePurchase::where('transaction_id', $transactionId)
-            ->orWhere('id', $transactionId)
-            ->first();
+        $purchase = PackagePurchase::where('transaction_id', $transactionId)->first();
 
         if (!$purchase) {
             Log::warning('Purchase not found for verification', ['transaction_id' => $transactionId]);
@@ -125,32 +118,23 @@ class PaymentService
         }
 
         try {
-            // 3️⃣ دریافت تراکنش از دیتابیس Shetabit
-            $transaction = Transaction::where('transactionId', $transactionId)
-                ->orWhere('id', $transactionId)
-                ->first();
-
-            if (!$transaction) {
-                throw new RuntimeException('تراکنش درگاه یافت نشد.');
-            }
-
-            // 4️⃣ تایید پرداخت
+            // 3️⃣ تایید پرداخت با استفاده از transactionId ذخیره شده
             $receipt = Payment::amount($purchase->amount)
                 ->transactionId($transactionId)
                 ->verify();
 
-            // 5️⃣ بررسی نتیجه پرداخت
+            // 4️⃣ بررسی نتیجه پرداخت
             if ($receipt->isPaid()) {
                 // پرداخت موفق
-                $purchase->markAsPaid($transaction->driver ?? 'unknown');
+                $purchase->markAsPaid($purchase->gateway ?? 'unknown');
 
                 Log::info('Payment verified successfully', [
-                    'purchase_id' => $purchase->id,
+                    'purchase_id'    => $purchase->id,
                     'transaction_id' => $transactionId,
-                    'gateway' => $transaction->driver ?? 'unknown'
+                    'gateway'        => $purchase->gateway,
                 ]);
 
-                // 6️⃣ صدور لایسنس
+                // 5️⃣ صدور لایسنس
                 try {
                     $license = app(LicenseService::class)->issueLicense(
                         $purchase,
@@ -162,7 +146,7 @@ class PaymentService
                         'license_key'   => $license->license_key,
                         'expires_at'    => $license->expires_at?->toDateTimeString(),
                         'transaction_id' => $transactionId,
-                        'gateway'       => $transaction->driver ?? 'unknown',
+                        'gateway'       => $purchase->gateway ?? 'unknown',
                         'message'       => 'پرداخت با موفقیت تأیید شد.',
                         'purchase_id'   => $purchase->id,
                     ];
@@ -170,7 +154,7 @@ class PaymentService
                 } catch (\Exception $e) {
                     Log::error('License issuance failed after payment', [
                         'purchase_id' => $purchase->id,
-                        'error' => $e->getMessage()
+                        'error'       => $e->getMessage(),
                     ]);
 
                     return [
@@ -185,8 +169,8 @@ class PaymentService
                 $purchase->markAsFailed('پرداخت تأیید نشد');
 
                 Log::warning('Payment verification failed - not paid', [
-                    'purchase_id' => $purchase->id,
-                    'transaction_id' => $transactionId
+                    'purchase_id'    => $purchase->id,
+                    'transaction_id' => $transactionId,
                 ]);
 
                 return [
@@ -195,15 +179,31 @@ class PaymentService
                 ];
             }
 
+        } catch (InvalidPaymentException $e) {
+            // خطای اختصاصی پرداخت
+            $purchase->markAsFailed($e->getMessage());
+
+            Log::error('Invalid payment exception', [
+                'transaction_id' => $transactionId,
+                'purchase_id'    => $purchase->id ?? null,
+                'error'          => $e->getMessage(),
+                'code'           => $e->getCode(),
+            ]);
+
+            return [
+                'paid'    => false,
+                'message' => 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
+            ];
+
         } catch (\Exception $e) {
-            // خطا در تایید پرداخت
+            // سایر خطاها
             $purchase->markAsFailed($e->getMessage());
 
             Log::error('Payment verification exception', [
                 'transaction_id' => $transactionId,
-                'purchase_id' => $purchase->id ?? null,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'purchase_id'    => $purchase->id ?? null,
+                'error'          => $e->getMessage(),
+                'trace'          => $e->getTraceAsString(),
             ]);
 
             return [
@@ -221,8 +221,8 @@ class PaymentService
         $route = $customRoute ?? config('packages.payment.callback_route', 'admin.packages.payment.callback');
 
         return URL::signedRoute($route, [
-            'purchase_id' => $purchase->id,
-            'transaction_id' => $purchase->transaction_id ?? 'pending'
+            'purchase_id'    => $purchase->id,
+            'transaction_id' => $purchase->transaction_id ?? 'pending',
         ]);
     }
 
@@ -233,30 +233,30 @@ class PaymentService
     {
         if ($purchase->isPaid()) {
             return [
-                'status' => 'paid',
-                'message' => 'پرداخت انجام شده است.',
+                'status'      => 'paid',
+                'message'     => 'پرداخت انجام شده است.',
                 'license_key' => $purchase->license?->license_key,
-                'expires_at' => $purchase->license?->expires_at?->toDateTimeString(),
+                'expires_at'  => $purchase->license?->expires_at?->toDateTimeString(),
             ];
         }
 
         if ($purchase->status === 'failed') {
             return [
-                'status' => 'failed',
+                'status'  => 'failed',
                 'message' => 'پرداخت ناموفق بوده است.',
             ];
         }
 
         if ($purchase->status === 'pending') {
             return [
-                'status' => 'pending',
-                'message' => 'پرداخت در انتظار تأیید است.',
+                'status'      => 'pending',
+                'message'     => 'پرداخت در انتظار تأیید است.',
                 'payment_url' => $purchase->payment_url,
             ];
         }
 
         return [
-            'status' => 'unknown',
+            'status'  => 'unknown',
             'message' => 'وضعیت پرداخت نامشخص است.',
         ];
     }
