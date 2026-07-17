@@ -64,6 +64,7 @@ class ApiPackageController extends Controller
                 ],
             ]);
         } catch (RuntimeException $e) {
+            dd($e->getMessage());
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
         }
     }
