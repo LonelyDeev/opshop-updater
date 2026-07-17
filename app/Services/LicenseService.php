@@ -119,7 +119,7 @@ class LicenseService
             'valid'         => true,
             'expires_at'    => $license->expires_at?->toDateTimeString(),
             'days_remaining'=> $license->days_remaining,
-            'version'       => $latestVersion?->version,
+            'version'       => $latestVersion ? $latestVersion->first()->version : null,
             'is_unlimited'  => $license->isUnlimited(),
         ];
     }
