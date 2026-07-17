@@ -76,13 +76,13 @@ return new class extends Migration
             $table->index(['package_id', 'is_active']);
         });
 
-        // 4) لایسنس‌های صادر شده (بدون ارجاع به package_purchases)
+        // 4) لایسنس‌های صادر شده (بدون کلید خارجی به purchases)
         Schema::create('package_licenses', function (Blueprint $table) {
             $table->id();
             $table->string('license_key', 64)->unique();
             $table->foreignId('package_id')->constrained()->cascadeOnDelete();
             $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('purchase_id')->nullable()->constrained('package_purchases')->nullOnDelete();
+            $table->foreignId('purchase_id')->nullable(); // فقط فیلد، بدون constrait
             $table->foreignId('renewed_from')->nullable()->constrained('package_licenses')->nullOnDelete();
             $table->string('status', 20)->default('active');
             $table->timestamp('starts_at')->nullable();
@@ -96,14 +96,14 @@ return new class extends Migration
             $table->index('status');
         });
 
-        // 5) تاریخچه خرید (با ارجاع به package_licenses)
+        // 5) تاریخچه خرید (بدون کلید خارجی به licenses)
         Schema::create('package_purchases', function (Blueprint $table) {
             $table->id();
             $table->foreignId('package_id')->constrained()->cascadeOnDelete();
             $table->foreignId('version_id')->nullable()->constrained('package_versions')->nullOnDelete();
             $table->foreignId('pricing_plan_id')->nullable()->constrained('package_pricing_plans')->nullOnDelete();
             $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('license_id')->nullable()->constrained('package_licenses')->nullOnDelete();
+            $table->foreignId('license_id')->nullable(); // فقط فیلد، بدون constrait
             $table->string('transaction_id')->nullable()->index();
             $table->string('callback_url')->nullable();
             $table->unsignedBigInteger('amount')->default(0);
@@ -133,13 +133,14 @@ return new class extends Migration
             $table->index('expires_at');
         });
 
+        // 7) تصاویر پکیج
         Schema::create('package_images', function (Blueprint $table) {
             $table->id();
             $table->foreignId('package_id')->constrained()->cascadeOnDelete();
-            $table->string('path');              // مسیر در storage/app/public/packages/gallery
+            $table->string('path');
             $table->string('original_name')->nullable();
             $table->string('alt')->nullable();
-            $table->unsignedInteger('size')->nullable(); // bytes
+            $table->unsignedInteger('size')->nullable();
             $table->integer('sort_order')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
@@ -150,13 +151,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::dropIfExists('package_images');
         Schema::dropIfExists('package_download_tokens');
         Schema::dropIfExists('package_purchases');
         Schema::dropIfExists('package_licenses');
         Schema::dropIfExists('package_pricing_plans');
         Schema::dropIfExists('package_versions');
         Schema::dropIfExists('packages');
-        Schema::dropIfExists('package_images');
-
     }
 };
