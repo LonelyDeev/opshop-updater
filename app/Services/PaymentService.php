@@ -41,6 +41,7 @@ class PaymentService
                 ->detail('customer_id', $purchase->customer_id)
                 ->detail('pricing_plan_id', $purchase->pricing_plan_id);
 
+
             // 3️⃣ ایجاد پرداخت
             $payment = Payment::via($gateway)
                 ->config($gatewayConfigs)
