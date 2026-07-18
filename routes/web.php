@@ -23,7 +23,6 @@ Route::get('/',function(){
 Route::get('get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
 
 
-
 // مسیرهای مدیریت با احراز هویت
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified']) // افزودن verified در صورت نیاز
     ->group(function () {
@@ -125,3 +124,4 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified']) // اف
     });
 
 });
+\Illuminate\Support\Facades\Auth::routes();
