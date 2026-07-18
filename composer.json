@@ -9,7 +9,7 @@
         "php": "^8.3",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
-        "laravel/ui": "^4.6",
+        "laravel/ui": "*",
         "morilog/jalali": "^3.5",
         "shetabit/payment": "^6.4"
     },

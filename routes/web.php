@@ -21,7 +21,7 @@ Route::get('/',function(){
     return redirect('/admin');
 });
 Route::get('get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
-Auth::routes();
+\Illuminate\Support\Facades\Auth::routes();
 
 // مسیرهای مدیریت با احراز هویت
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified']) // افزودن verified در صورت نیاز
