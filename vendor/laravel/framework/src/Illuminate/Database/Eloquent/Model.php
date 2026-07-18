@@ -549,13 +549,7 @@ abstract class Model implements Arrayable, ArrayAccess, CanBeEscapedWhenCastToSt
             return true;
         }
 
-        foreach (static::$ignoreOnTouch as $ignoredClass) {
-            if ($class === $ignoredClass || is_subclass_of($class, $ignoredClass)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(static::$ignoreOnTouch, fn ($ignoredClass) => $class === $ignoredClass || is_subclass_of($class, $ignoredClass));
     }
 
     /**
@@ -651,8 +645,10 @@ abstract class Model implements Arrayable, ArrayAccess, CanBeEscapedWhenCastToSt
     /**
      * Execute a callback without broadcasting any model events for all model types.
      *
-     * @param  callable  $callback
-     * @return mixed
+     * @template TReturn
+     *
+     * @param  callable(): TReturn  $callback
+     * @return TReturn
      */
     public static function withoutBroadcasting(callable $callback)
     {
@@ -1246,6 +1242,34 @@ abstract class Model implements Arrayable, ArrayAccess, CanBeEscapedWhenCastToSt
     protected function decrementEach(array $columns, array $extra = [])
     {
         return $this->incrementOrDecrementEach($columns, $extra, 'decrementEach');
+    }
+
+    /**
+     * Increment each given column's value by the given amounts without raising any events.
+     *
+     * @param  array<string, float|int>  $columns
+     * @param  array<string, mixed>  $extra
+     * @return int
+     */
+    protected function incrementEachQuietly(array $columns, array $extra = [])
+    {
+        return static::withoutEvents(
+            fn () => $this->incrementOrDecrementEach($columns, $extra, 'incrementEach')
+        );
+    }
+
+    /**
+     * Decrement each given column's value by the given amounts without raising any events.
+     *
+     * @param  array<string, float|int>  $columns
+     * @param  array<string, mixed>  $extra
+     * @return int
+     */
+    protected function decrementEachQuietly(array $columns, array $extra = [])
+    {
+        return static::withoutEvents(
+            fn () => $this->incrementOrDecrementEach($columns, $extra, 'decrementEach')
+        );
     }
 
     /**
@@ -2791,7 +2815,7 @@ abstract class Model implements Arrayable, ArrayAccess, CanBeEscapedWhenCastToSt
      */
     public function __call($method, $parameters)
     {
-        if (in_array($method, ['increment', 'decrement', 'incrementQuietly', 'decrementQuietly', 'incrementEach', 'decrementEach'])) {
+        if (in_array($method, ['increment', 'decrement', 'incrementQuietly', 'decrementQuietly', 'incrementEach', 'decrementEach', 'incrementEachQuietly', 'decrementEachQuietly'])) {
             return $this->$method(...$parameters);
         }
 

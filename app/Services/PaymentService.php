@@ -27,36 +27,41 @@ class PaymentService
         if (!$callbackUrl) {
             throw new RuntimeException('callback_url تنظیم نشده است.');
         }
-
         try {
-            // 1️⃣ ایجاد Invoice
+            // 1️⃣ تنظیمات درگاه
+            $gateway = 'zarinpal';
+            $gatewayConfigs = get_gateway_configs($gateway);
+
+            // 2️⃣ ایجاد Invoice
             $invoice = (new Invoice)
-                ->amount($purchase->amount)
+                ->amount(intval($purchase->amount))
                 ->detail('description', "خرید پکیج {$purchase->package->name} - {$purchase->package->slug}")
                 ->detail('purchase_id', $purchase->id)
                 ->detail('package_id', $purchase->package_id)
                 ->detail('customer_id', $purchase->customer_id)
                 ->detail('pricing_plan_id', $purchase->pricing_plan_id);
 
-            // 2️⃣ ایجاد پرداخت با کالبک
-            $payment = Payment::callbackUrl($callbackUrl)->purchase(
-                $invoice,
-                function ($driver, $transactionId) use ($purchase) {
-                    // ذخیره transactionId در مدل Purchase خودتان
-                    $purchase->update([
-                        'transaction_id' => $transactionId,
-                        'gateway'        => $driver,
-                    ]);
+            // 3️⃣ ایجاد پرداخت
+            $payment = Payment::via($gateway)
+                ->config($gatewayConfigs)
+                ->callbackUrl($callbackUrl)
+                ->purchase(
+                    $invoice,
+                    function ($driver, $transactionId) use ($purchase, $gateway) {
+                        $purchase->update([
+                            'transaction_id' => $transactionId,
+                            'gateway'        => $driver,
+                        ]);
 
-                    Log::info('Purchase transaction created', [
-                        'purchase_id'   => $purchase->id,
-                        'transaction_id' => $transactionId,
-                        'gateway'       => $driver,
-                    ]);
-                }
-            );
+                        Log::info('Purchase transaction created', [
+                            'purchase_id'   => $purchase->id,
+                            'transaction_id' => $transactionId,
+                            'gateway'       => $driver,
+                        ]);
+                    }
+                );
 
-            // 3️⃣ اجرای پرداخت و دریافت آدرس
+            // 4️⃣ اجرای پرداخت و دریافت آدرس
             $payment->pay();
             $paymentUrl = $payment->getPaymentUrl();
 
@@ -64,7 +69,7 @@ class PaymentService
                 throw new RuntimeException('دریافت آدرس پرداخت از درگاه ناموفق بود.');
             }
 
-            // 4️⃣ آپدیت نهایی خرید
+            // 5️⃣ آپدیت نهایی
             $purchase->update([
                 'payment_url' => $paymentUrl,
                 'status'      => 'pending',
@@ -74,7 +79,7 @@ class PaymentService
                 'payment_url'    => $paymentUrl,
                 'transaction_id' => (string) $purchase->transaction_id,
                 'amount'         => $purchase->amount,
-                'gateway'        => $purchase->gateway ?? 'unknown',
+                'gateway'        => $purchase->gateway ?? $gateway,
             ];
 
         } catch (\Exception $e) {
@@ -118,23 +123,29 @@ class PaymentService
         }
 
         try {
-            // 3️⃣ تایید پرداخت با استفاده از transactionId ذخیره شده
-            $receipt = Payment::amount($purchase->amount)
+            // 3️⃣ تنظیمات درگاه برای تایید
+            $gateway = $purchase->gateway ?? 'zarinpal';
+            $gatewayConfigs = get_gateway_configs($gateway);
+
+            // 4️⃣ تایید پرداخت
+            $receipt = Payment::via($gateway)
+                ->config($gatewayConfigs)
+                ->amount($purchase->amount)
                 ->transactionId($transactionId)
                 ->verify();
 
-            // 4️⃣ بررسی نتیجه پرداخت
+            // 5️⃣ بررسی نتیجه پرداخت
             if ($receipt->isPaid()) {
                 // پرداخت موفق
-                $purchase->markAsPaid($purchase->gateway ?? 'unknown');
+                $purchase->markAsPaid($gateway);
 
                 Log::info('Payment verified successfully', [
                     'purchase_id'    => $purchase->id,
                     'transaction_id' => $transactionId,
-                    'gateway'        => $purchase->gateway,
+                    'gateway'        => $gateway,
                 ]);
 
-                // 5️⃣ صدور لایسنس
+                // 6️⃣ صدور لایسنس
                 try {
                     $license = app(LicenseService::class)->issueLicense(
                         $purchase,
@@ -146,7 +157,7 @@ class PaymentService
                         'license_key'   => $license->license_key,
                         'expires_at'    => $license->expires_at?->toDateTimeString(),
                         'transaction_id' => $transactionId,
-                        'gateway'       => $purchase->gateway ?? 'unknown',
+                        'gateway'       => $gateway,
                         'message'       => 'پرداخت با موفقیت تأیید شد.',
                         'purchase_id'   => $purchase->id,
                     ];

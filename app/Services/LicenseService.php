@@ -11,7 +11,7 @@ use App\Models\PackageVersion;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Shetabit\Payment\Facade\Payment;
+use packages\shetabit\payment\src\Facade\Payment;
 use Shetabit\Payment\Models\Transaction;
 
 class LicenseService

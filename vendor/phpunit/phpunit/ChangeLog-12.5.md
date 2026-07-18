@@ -2,6 +2,26 @@
 
 All notable changes of the PHPUnit 12.5 release series are documented in this file using the [Keep a CHANGELOG](https://keepachangelog.com/) principles.
 
+## [12.5.31] - 2026-07-06
+
+### Changed
+
+* [#6797](https://github.com/sebastianbergmann/phpunit/issues/6797): Adapt code generated for test double of interface with constructor for PHP 8.6
+
+## [12.5.30] - 2026-06-15
+
+### Fixed
+
+* [#6743](https://github.com/sebastianbergmann/phpunit/issues/6743): Improve error message for invalid version constraint in attribute
+* Class, method, and data-set names in TestDox HTML report are not escaped
+
+## [12.5.29] - 2026-06-04
+
+### Fixed
+
+* [#6683](https://github.com/sebastianbergmann/phpunit/issues/6683): `assertNotEquals()` failure message says "is equal to" instead of "is not equal to" when comparing arrays or objects
+* [#6700](https://github.com/sebastianbergmann/phpunit/issues/6700): `expectOutputString()` and `expectOutputRegex()` silently replace themselves and each other
+
 ## [12.5.28] - 2026-05-27
 
 ### Fixed
@@ -252,6 +272,9 @@ All notable changes of the PHPUnit 12.5 release series are documented in this fi
 * [#6380](https://github.com/sebastianbergmann/phpunit/pull/6380): Allow `Throwable` in `expectExceptionObject()`
 * A PHPUnit notice is now emitted for test methods that create a mock object but do not configure an expectation for it
 
+[12.5.31]: https://github.com/sebastianbergmann/phpunit/compare/12.5.30...12.5.31
+[12.5.30]: https://github.com/sebastianbergmann/phpunit/compare/12.5.29...12.5.30
+[12.5.29]: https://github.com/sebastianbergmann/phpunit/compare/12.5.28...12.5.29
 [12.5.28]: https://github.com/sebastianbergmann/phpunit/compare/12.5.27...12.5.28
 [12.5.27]: https://github.com/sebastianbergmann/phpunit/compare/12.5.26...12.5.27
 [12.5.26]: https://github.com/sebastianbergmann/phpunit/compare/12.5.25...12.5.26

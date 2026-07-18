@@ -3,6 +3,7 @@
 namespace GuzzleHttp;
 
 use GuzzleHttp\Exception\BadResponseException;
+use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TooManyRedirectsException;
 use GuzzleHttp\Promise\PromiseInterface;
 use Psr\Http\Message\RequestInterface;
@@ -104,6 +105,10 @@ class RedirectMiddleware
             );
         }
 
+        // The caller's delay applies once, before the initial request, not
+        // before each followed redirect.
+        unset($options['delay']);
+
         $promise = $this($nextRequest, $options);
 
         // Add headers to be able to track history of redirects.
@@ -169,11 +174,13 @@ class RedirectMiddleware
         if ($statusCode == 303
             || ($statusCode <= 302 && !$options['allow_redirects']['strict'])
         ) {
-            $safeMethods = ['GET', 'HEAD', 'OPTIONS'];
             $requestMethod = $request->getMethod();
 
-            $modify['method'] = in_array($requestMethod, $safeMethods) ? $requestMethod : 'GET';
-            $modify['body'] = '';
+            if ($requestMethod !== 'QUERY' || !\in_array($statusCode, [301, 302], true)) {
+                $modify['method'] = \in_array($requestMethod, ['GET', 'HEAD', 'OPTIONS'], true) ? $requestMethod : 'GET';
+                $modify['body'] = '';
+                $modify['remove_headers'] = ['Content-Length', 'Transfer-Encoding'];
+            }
         }
 
         $uri = self::redirectUri($request, $response, $protocols);
@@ -183,7 +190,20 @@ class RedirectMiddleware
         }
 
         $modify['uri'] = $uri;
-        Psr7\Message::rewindBody($request);
+
+        // The body only needs to be rewound when the next request reuses it.
+        if (!isset($modify['body'])) {
+            try {
+                Psr7\Message::rewindBody($request);
+            } catch (\RuntimeException $e) {
+                throw new RequestException(
+                    'Redirect failed because the request body could not be rewound: '.$e->getMessage(),
+                    $request,
+                    $response,
+                    $e
+                );
+            }
+        }
 
         // Add the Referer header if it is told to do so and only
         // add the header if we are not redirecting from https to http.

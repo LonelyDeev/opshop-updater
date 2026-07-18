@@ -453,13 +453,7 @@ trait ValidatesAttributes
             return false;
         }
 
-        foreach ($parameters as $param) {
-            if (! Arr::exists($value, $param)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($parameters, fn ($param) => Arr::exists($value, $param));
     }
 
     /**
@@ -488,7 +482,7 @@ trait ValidatesAttributes
      *
      * @param  string  $attribute
      * @param  mixed  $value
-     * @param  array{0: 'strict'}  $parameters
+     * @param  array{0?: 'strict'}  $parameters
      * @return bool
      */
     public function validateBoolean($attribute, $value, $parameters)
@@ -507,7 +501,7 @@ trait ValidatesAttributes
      *
      * @param  string  $attribute
      * @param  mixed  $value
-     * @param  array{0: string}  $parameters
+     * @param  array{0?: string}  $parameters
      * @return bool
      */
     public function validateConfirmed($attribute, $value, $parameters)
@@ -529,13 +523,7 @@ trait ValidatesAttributes
             return false;
         }
 
-        foreach ($parameters as $parameter) {
-            if (! in_array($parameter, $value)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($parameters, fn ($parameter) => in_array($parameter, $value));
     }
 
     /**
@@ -552,13 +540,7 @@ trait ValidatesAttributes
             return false;
         }
 
-        foreach ($parameters as $parameter) {
-            if (in_array($parameter, $value)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($parameters, fn ($parameter) => ! in_array($parameter, $value));
     }
 
     /**
@@ -1574,13 +1556,7 @@ trait ValidatesAttributes
             return false;
         }
 
-        foreach ($parameters as $param) {
-            if (Arr::exists($value, $param)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($parameters, fn ($param) => Arr::exists($value, $param));
     }
 
     /**
@@ -1985,7 +1961,7 @@ trait ValidatesAttributes
      *
      * @param  string  $attribute
      * @param  mixed  $value
-     * @param  array{0: 'strict'}  $parameters
+     * @param  array{0?: 'strict'}  $parameters
      * @return bool
      */
     public function validateNumeric($attribute, $value, array $parameters)
@@ -2570,13 +2546,7 @@ trait ValidatesAttributes
      */
     protected function anyFailingRequired(array $attributes)
     {
-        foreach ($attributes as $key) {
-            if (! $this->validateRequired($key, $this->getValue($key))) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($attributes, fn ($key) => ! $this->validateRequired($key, $this->getValue($key)));
     }
 
     /**
@@ -2587,13 +2557,7 @@ trait ValidatesAttributes
      */
     protected function allFailingRequired(array $attributes)
     {
-        foreach ($attributes as $key) {
-            if ($this->validateRequired($key, $this->getValue($key))) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($attributes, fn ($key) => ! $this->validateRequired($key, $this->getValue($key)));
     }
 
     /**
@@ -2846,7 +2810,7 @@ trait ValidatesAttributes
             '>' => $first > $second,
             '<=' => $first <= $second,
             '>=' => $first >= $second,
-            '=' => $first == $second,
+            '=' => ($first === $second) || ($first == $second && ! is_null($first) && ! is_null($second)),
             default => throw new InvalidArgumentException,
         };
     }

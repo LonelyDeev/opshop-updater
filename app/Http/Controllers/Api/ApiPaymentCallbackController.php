@@ -8,7 +8,7 @@ use App\Services\LicenseService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Shetabit\Payment\Facade\Payment;
+use packages\shetabit\payment\src\Facade\Payment;
 use Shetabit\Payment\Models\Transaction;
 
 class ApiPaymentCallbackController extends Controller

@@ -21,7 +21,7 @@ Route::get('/',function(){
     return redirect('/admin');
 });
 Route::get('get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
-Auth::routes();
+//Auth::routes();
 
 
 // مسیرهای مدیریت با احراز هویت
@@ -72,6 +72,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified']) // اف
             Route::post('/', [SettingController::class, 'update'])->name('update');
             Route::post('clear-cache', [SettingController::class, 'clearCache'])->name('clear-cache');
             Route::post('optimize', [SettingController::class, 'optimize'])->name('optimize');
+            Route::get('gateways', [SettingController::class, 'showGateways'])->name('gateways');
+            Route::post('gateways', [SettingController::class, 'updateGateways'])->name('updateGateways');
         });
 
 
