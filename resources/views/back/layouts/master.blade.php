@@ -49,10 +49,10 @@
 
                 <div class="user-profile">
                     <div class="user-avatar">
-                        {{ substr(Auth::user()->name ?? 'Admin', 0, 1) }}
+                        {{ substr(auth()->user()->name ?? 'Admin', 0, 1) }}
                     </div>
                     <div class="user-info">
-                        <span class="user-name">{{ Auth::user()->name ?? 'مدیر سیستم' }}</span>
+                        <span class="user-name">{{ auth()->user()->name ?? 'مدیر سیستم' }}</span>
                         <span class="user-role">مدیر کل</span>
                     </div>
                 </div>
