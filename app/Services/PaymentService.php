@@ -12,11 +12,7 @@ use Shetabit\Payment\Facade\Payment;
 
 class PaymentService
 {
-    /**
-     * ایجاد تراکنش پرداخت و دریافت payment_url از درگاه
-     *
-     * @return array{payment_url: string, transaction_id: string, amount: int, gateway: string}
-     */
+
     public function createPayment(PackagePurchase $purchase): array
     {
         if ($purchase->amount <= 0) {
@@ -40,7 +36,6 @@ class PaymentService
                 ->detail('package_id', $purchase->package_id)
                 ->detail('customer_id', $purchase->customer_id)
                 ->detail('pricing_plan_id', $purchase->pricing_plan_id);
-
 
             // 3️⃣ ایجاد پرداخت
             $payment = Payment::via($gateway)
