@@ -76,24 +76,27 @@
                                             </td>
                                             <td>{{ $version->release_date ? jdate($version->release_date)->format('Y/m/d') : '—' }}</td>
                                             <td class="text-center text-nowrap">
-                                                <a href="{{ route('admin.packages.versions.show', [$package, $version]) }}"
-                                                   class="btn btn-sm btn-outline-info" title="مشاهده">
-                                                    <i class="fas fa-eye"></i>
-                                                    مشاهده
-                                                </a>
-                                                <a href="{{ route('admin.packages.versions.edit', [$package, $version]) }}"
-                                                   class="btn btn-sm btn-outline-primary" title="ویرایش">
-                                                    <i class="fas fa-edit-2"></i>
-                                                    ویرایش
-                                                </a>
-                                                <form action="{{ route('admin.packages.versions.destroy', [$package, $version]) }}"
-                                                      method="POST" class="d-inline" onsubmit="return confirm('حذف نسخه؟')">
-                                                    @csrf @method('DELETE')
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
-                                                        <i class="fas fa-trash"></i>
-                                                        حذف
-                                                    </button>
-                                                </form>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    <a href="{{ route('admin.packages.versions.show', [$package, $version]) }}"
+                                                       class="btn btn-sm btn-outline-info" title="مشاهده">
+                                                        <i class="fas fa-eye"></i>
+                                                        مشاهده
+                                                    </a>
+                                                    <a href="{{ route('admin.packages.versions.edit', [$package, $version]) }}"
+                                                       class="btn btn-sm btn-outline-primary" title="ویرایش">
+                                                        <i class="fas fa-edit-2"></i>
+                                                        ویرایش
+                                                    </a>
+                                                    <form action="{{ route('admin.packages.versions.destroy', [$package, $version]) }}"
+                                                          method="POST" class="d-inline" onsubmit="return confirm('حذف نسخه؟')">
+                                                        @csrf @method('DELETE')
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
+                                                            <i class="fas fa-trash"></i>
+                                                            حذف
+                                                        </button>
+                                                    </form>
+                                                </div>
+
                                             </td>
                                         </tr>
                                     @endforeach
