@@ -78,17 +78,20 @@
                                             <td class="text-center text-nowrap">
                                                 <a href="{{ route('admin.packages.versions.show', [$package, $version]) }}"
                                                    class="btn btn-sm btn-outline-info" title="مشاهده">
-                                                    <i class="feather icon-eye"></i>
+                                                    <i class="fas fa-eye"></i>
+                                                    مشاهده
                                                 </a>
                                                 <a href="{{ route('admin.packages.versions.edit', [$package, $version]) }}"
                                                    class="btn btn-sm btn-outline-primary" title="ویرایش">
-                                                    <i class="feather icon-edit-2"></i>
+                                                    <i class="fas fa-edit-2"></i>
+                                                    ویرایش
                                                 </a>
                                                 <form action="{{ route('admin.packages.versions.destroy', [$package, $version]) }}"
                                                       method="POST" class="d-inline" onsubmit="return confirm('حذف نسخه؟')">
                                                     @csrf @method('DELETE')
                                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
                                                         <i class="fas fa-trash"></i>
+                                                        حذف
                                                     </button>
                                                 </form>
                                             </td>
