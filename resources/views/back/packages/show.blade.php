@@ -79,7 +79,7 @@
                                     <p class="text-muted"><strong>خلاصه:</strong> {{ $package->short_description }}</p>
                                 @endif
                                 @if ($package->description)
-                                    <div class="border-top pt-2 mt-2">{!! nl2br(e($package->description)) !!}</div>
+                                    <div class="border-top pt-2 mt-2">{!! $package->description !!}</div>
                                 @endif
                             </div>
                         </div>
