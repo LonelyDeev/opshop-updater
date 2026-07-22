@@ -79,6 +79,7 @@
 </div>
 <script src="{{ asset('back/assets/js/vendors/vendors.min.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.2/feather.min.js" integrity="sha512-zMm7+ZQ8AZr1r3W8Z8lDATkH05QG5Gm2xc6MlsCdBz9l6oE8Y7IXByMgSm/rdRQrhuHt99HAYfMljBOEZ68q5A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+@stack('plugin-scripts')
 <!-- Scripts -->
 <script>
     function toggleSidebar() {
