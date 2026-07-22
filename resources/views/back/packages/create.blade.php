@@ -82,7 +82,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">توضیحات کامل</label>
-                                <textarea name="description" rows="5" class="form-control">{{ old('description') }}</textarea>
+                                <textarea name="description" id="description" rows="5" class="form-control">{{ old('description') }}</textarea>
                             </div>
 
                             {{-- تصویر شاخص --}}
@@ -189,36 +189,40 @@
         </div>
     </div>
 
-    @push('scripts')
-        <script>
-            // پیش‌نمایش تصویر شاخص
-            document.querySelector('input[name="thumbnail_file"]').addEventListener('change', function (e) {
-                const container = document.getElementById('thumbnail-preview-container');
-                container.innerHTML = '';
-                if (e.target.files && e.target.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = function (ev) {
-                        container.innerHTML = `<img src="${ev.target.result}" class="img-thumbnail" style="max-height: 120px;">`;
-                    };
-                    reader.readAsDataURL(e.target.files[0]);
-                }
-            });
 
-            // پیش‌نمایش گالری
-            document.querySelector('input[name="gallery[]"]').addEventListener('change', function (e) {
-                const preview = document.getElementById('gallery-preview');
-                preview.innerHTML = '';
-                Array.from(e.target.files).forEach(function (file) {
-                    const reader = new FileReader();
-                    reader.onload = function (ev) {
-                        const col = document.createElement('div');
-                        col.className = 'col-4 col-md-3';
-                        col.innerHTML = `<img src="${ev.target.result}" class="img-thumbnail" style="height: 80px; object-fit: cover; width: 100%;">`;
-                        preview.appendChild(col);
-                    };
-                    reader.readAsDataURL(file);
-                });
-            });
-        </script>
-    @endpush
 @endsection
+@include('back.partials.plugins', ['plugins' => ['ckeditor']])
+
+@push('scripts')
+    <script>
+        CKEDITOR.replace('description');
+        // پیش‌نمایش تصویر شاخص
+        document.querySelector('input[name="thumbnail_file"]').addEventListener('change', function (e) {
+            const container = document.getElementById('thumbnail-preview-container');
+            container.innerHTML = '';
+            if (e.target.files && e.target.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (ev) {
+                    container.innerHTML = `<img src="${ev.target.result}" class="img-thumbnail" style="max-height: 120px;">`;
+                };
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
+
+        // پیش‌نمایش گالری
+        document.querySelector('input[name="gallery[]"]').addEventListener('change', function (e) {
+            const preview = document.getElementById('gallery-preview');
+            preview.innerHTML = '';
+            Array.from(e.target.files).forEach(function (file) {
+                const reader = new FileReader();
+                reader.onload = function (ev) {
+                    const col = document.createElement('div');
+                    col.className = 'col-4 col-md-3';
+                    col.innerHTML = `<img src="${ev.target.result}" class="img-thumbnail" style="height: 80px; object-fit: cover; width: 100%;">`;
+                    preview.appendChild(col);
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+    </script>
+@endpush

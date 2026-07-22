@@ -96,7 +96,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">توضیحات کامل</label>
-                                <textarea name="description" rows="5" class="form-control">{{ old('description', $package->description) }}</textarea>
+                                <textarea name="description" id="description" rows="5" class="form-control">{{ old('description', $package->description) }}</textarea>
                             </div>
 
                             {{-- تصویر شاخص --}}
@@ -245,99 +245,102 @@
         </div>
     </div>
 
-    @push('styles')
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.css">
-    @endpush
 
-    @push('scripts')
-        <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-        <script>
-            const csrfToken = '{{ csrf_token() }}';
-            const reorderUrl = '{{ route("admin.packages.images.reorder", $package) }}';
+@endsection
+{{--@push('styles')
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.css">
+@endpush--}}
+@include('back.partials.plugins', ['plugins' => ['ckeditor','jquery-ui-sortable']])
 
-            // پیش‌نمایش تصویر شاخص
-            document.querySelector('input[name="thumbnail_file"]').addEventListener('change', function (e) {
-                const container = document.getElementById('thumbnail-preview-container');
-                container.innerHTML = '';
-                if (e.target.files && e.target.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = function (ev) {
-                        container.innerHTML = `<img src="${ev.target.result}" class="img-thumbnail" style="max-height: 120px;">`;
-                    };
-                    reader.readAsDataURL(e.target.files[0]);
-                }
+@push('scripts')
+   {{-- <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>--}}
+    <script>
+        CKEDITOR.replace('description');
+        const csrfToken = '{{ csrf_token() }}';
+        const reorderUrl = '{{ route("admin.packages.images.reorder", $package) }}';
+
+        // پیش‌نمایش تصویر شاخص
+        document.querySelector('input[name="thumbnail_file"]').addEventListener('change', function (e) {
+            const container = document.getElementById('thumbnail-preview-container');
+            container.innerHTML = '';
+            if (e.target.files && e.target.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (ev) {
+                    container.innerHTML = `<img src="${ev.target.result}" class="img-thumbnail" style="max-height: 120px;">`;
+                };
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
+
+        // پیش‌نمایش گالری جدید
+        document.querySelector('input[name="gallery[]"]').addEventListener('change', function (e) {
+            const preview = document.getElementById('gallery-preview');
+            preview.innerHTML = '';
+            Array.from(e.target.files).forEach(function (file) {
+                const reader = new FileReader();
+                reader.onload = function (ev) {
+                    const col = document.createElement('div');
+                    col.className = 'col-4 col-md-3';
+                    col.innerHTML = `<img src="${ev.target.result}" class="img-thumbnail" style="height: 80px; object-fit: cover; width: 100%;">`;
+                    preview.appendChild(col);
+                };
+                reader.readAsDataURL(file);
             });
+        });
 
-            // پیش‌نمایش گالری جدید
-            document.querySelector('input[name="gallery[]"]').addEventListener('change', function (e) {
-                const preview = document.getElementById('gallery-preview');
-                preview.innerHTML = '';
-                Array.from(e.target.files).forEach(function (file) {
-                    const reader = new FileReader();
-                    reader.onload = function (ev) {
-                        const col = document.createElement('div');
-                        col.className = 'col-4 col-md-3';
-                        col.innerHTML = `<img src="${ev.target.result}" class="img-thumbnail" style="height: 80px; object-fit: cover; width: 100%;">`;
-                        preview.appendChild(col);
-                    };
-                    reader.readAsDataURL(file);
-                });
+        // حذف تصویر گالری
+        document.querySelectorAll('.delete-image-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                if (!confirm('حذف این تصویر؟')) return;
+                const packageId = this.dataset.packageId;
+                const imageId = this.dataset.imageId;
+                const item = this.closest('.gallery-item');
+
+                fetch(`/admin/packages/${packageId}/images/${imageId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    }
+                })
+                    .then(r => r.json())
+                    .then(resp => {
+                        if (resp.success) {
+                            item.remove();
+                        } else {
+                            alert(resp.message || 'خطا در حذف');
+                        }
+                    })
+                    .catch(err => alert('خطا در ارتباط با سرور'));
             });
+        });
 
-            // حذف تصویر گالری
-            document.querySelectorAll('.delete-image-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    if (!confirm('حذف این تصویر؟')) return;
-                    const packageId = this.dataset.packageId;
-                    const imageId = this.dataset.imageId;
-                    const item = this.closest('.gallery-item');
+        // قابلیت drag & drop برای مرتب‌سازی گالری
+        const galleryExisting = document.getElementById('gallery-existing');
+        if (galleryExisting) {
+            Sortable.create(galleryExisting, {
+                animation: 150,
+                handle: '.sort-handle',
+                onEnd: function () {
+                    const orderedIds = Array.from(galleryExisting.querySelectorAll('.gallery-item'))
+                        .map(el => parseInt(el.dataset.id));
 
-                    fetch(`/admin/packages/${packageId}/images/${imageId}`, {
-                        method: 'DELETE',
+                    fetch(reorderUrl, {
+                        method: 'POST',
                         headers: {
                             'X-CSRF-TOKEN': csrfToken,
+                            'Content-Type': 'application/json',
                             'Accept': 'application/json'
-                        }
+                        },
+                        body: JSON.stringify({ ordered_ids: orderedIds })
                     })
                         .then(r => r.json())
                         .then(resp => {
-                            if (resp.success) {
-                                item.remove();
-                            } else {
-                                alert(resp.message || 'خطا در حذف');
-                            }
+                            if (!resp.success) console.error('Reorder failed');
                         })
-                        .catch(err => alert('خطا در ارتباط با سرور'));
-                });
+                        .catch(err => console.error(err));
+                }
             });
-
-            // قابلیت drag & drop برای مرتب‌سازی گالری
-            const galleryExisting = document.getElementById('gallery-existing');
-            if (galleryExisting) {
-                Sortable.create(galleryExisting, {
-                    animation: 150,
-                    handle: '.sort-handle',
-                    onEnd: function () {
-                        const orderedIds = Array.from(galleryExisting.querySelectorAll('.gallery-item'))
-                            .map(el => parseInt(el.dataset.id));
-
-                        fetch(reorderUrl, {
-                            method: 'POST',
-                            headers: {
-                                'X-CSRF-TOKEN': csrfToken,
-                                'Content-Type': 'application/json',
-                                'Accept': 'application/json'
-                            },
-                            body: JSON.stringify({ ordered_ids: orderedIds })
-                        })
-                            .then(r => r.json())
-                            .then(resp => {
-                                if (!resp.success) console.error('Reorder failed');
-                            })
-                            .catch(err => console.error(err));
-                    }
-                });
-            }
-        </script>
-    @endpush
-@endsection
+        }
+    </script>
+@endpush

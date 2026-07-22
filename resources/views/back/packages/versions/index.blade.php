@@ -84,7 +84,7 @@
                                                     </a>
                                                     <a href="{{ route('admin.packages.versions.edit', [$package, $version]) }}"
                                                        class="btn btn-sm btn-outline-primary" title="ویرایش">
-                                                        <i class="fas fa-edit-2"></i>
+                                                        <i class="fas fa-edit"></i>
                                                         ویرایش
                                                     </a>
                                                     <form action="{{ route('admin.packages.versions.destroy', [$package, $version]) }}"
