@@ -43,7 +43,7 @@
                         <td>{{ $customer->name }}</td>
                         <td>{{ $customer->email }}</td>
                         <td>{{ $customer->phone ?? '-' }}</td>
-                        <td><a href="{{ $customer->website_url }}" target="_blank">{{ Str::limit($customer->website_url, 30) }}</a></td>
+                        <td><a href="{{ $customer->website_url }}" target="_blank">{{ \Illuminate\Support\Str::limit($customer->website_url, 30) }}</a></td>
                         <td>
                             {{ $customer->update_code }}
                             <button class="btn btn-sm btn-outline-secondary copy-btn" data-code="{{ $customer->update_code }}">کپی</button>
