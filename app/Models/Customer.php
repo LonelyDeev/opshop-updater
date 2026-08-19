@@ -42,7 +42,7 @@ class Customer extends Model
         });
     }
 
-    private static function generateUpdateCode(): string
+    public static function generateUpdateCode(): string
     {
         do {
             $code = strtoupper(bin2hex(random_bytes(6))); // تولید کد 12 کاراکتری
