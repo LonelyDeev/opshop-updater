@@ -119,14 +119,25 @@
 
                 @push('scripts')
                     <script>
-                        document.getElementById('generateCodeBtn').addEventListener('click', function () {
-                            fetch('/api/generate-update-code') // یا هر endpoint مناسب دیگر
-                                .then(response => response.json())
-                                .then(data => document.getElementById('update_code').value = data.code)
-                                .catch(err => console.error('Error generating code:', err));
+                        document.getElementById('generateCodeBtn').addEventListener('click', function() {
+                            const code = generateRandomCode(12);
+                            document.getElementById('update_code').value = code;
+
+                            // نمایش پیام کوتاه
+                            const btn = this;
+                            const originalText = btn.innerHTML;
+                            btn.innerHTML = '<i class="fas fa-check"></i> تولید شد';
+                            btn.classList.add('btn-success');
+                            btn.classList.remove('btn-outline-secondary');
+
+                            setTimeout(() => {
+                                btn.innerHTML = originalText;
+                                btn.classList.remove('btn-success');
+                                btn.classList.add('btn-outline-secondary');
+                            }, 2000);
                         });
 
-                        // تولید کد تصادفی در صورت نیاز - نمونه ساده جاوااسکریپت
+                        // تولید کد تصادفی
                         function generateRandomCode(length = 12) {
                             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
                             let result = '';
