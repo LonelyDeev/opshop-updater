@@ -39,12 +39,24 @@ class PackageApiAuthService
 
         // 3) بررسی دامنه
         $allowedDomain = $customer->website_url;
-        $requestDomain = $request->getHost();
-        $requestFullDomain = $request->getHttpHost();
 
-        if (!$this->isDomainAllowed($allowedDomain, $requestFullDomain, $requestDomain)) {
+        // دریافت دامنه از هدر X-Project-Url
+        $projectUrl = $request->header('X-Project-Url');
+
+        if (!$projectUrl) {
             throw new RuntimeException(
-                "دسترسی از دامنه {$requestFullDomain} مجاز نیست.",
+                'هدر دامنه (X-Project-Url) ارسال نشده است.',
+                403
+            );
+        }
+
+        // استخراج فقط هاست از آدرس ارسال شده (حذف http/https و مسیرها)
+        $requestDomain = parse_url($projectUrl, PHP_URL_HOST) ?: preg_replace('#^https?://#', '', $projectUrl);
+
+        // ارسال دامنه استخراج شده به متد بررسی
+        if (!$this->isDomainAllowed($allowedDomain, $requestDomain, $requestDomain)) {
+            throw new RuntimeException(
+                "دسترسی از دامنه {$requestDomain} مجاز نیست.",
                 403
             );
         }
@@ -52,29 +64,31 @@ class PackageApiAuthService
         return $customer;
     }
 
-    /**
-     * بررسی تطابق دامنه‌ی درخواست با دامنه‌ی مجاز مشتری
-     */
-    public function isDomainAllowed(?string $allowed, string $requestFull, string $requestHost): bool
+    public function isDomainAllowed(?string $allowed, ?string $requestFull, ?string $requestHost): bool
     {
-        if (!$allowed) {
+        if (!$allowed || !$requestHost) {
             return false;
         }
 
-        // نرمال‌سازی - حذف http:// و https:// و www
+        // نرمال‌سازی دامنه مجاز - حذف http:// و https:// و www
         $allowed = preg_replace('#^https?://#', '', $allowed);
         $allowed = preg_replace('#^www\.#', '', $allowed);
         $allowed = trim($allowed, '/');
 
+        // نرمال‌سازی دامنه درخواست‌کننده
+        $requestFull = preg_replace('#^https?://#', '', $requestFull);
         $requestFull = preg_replace('#^www\.#', '', $requestFull);
+        $requestFull = trim($requestFull, '/');
+
+        $requestHost = preg_replace('#^https?://#', '', $requestHost);
         $requestHost = preg_replace('#^www\.#', '', $requestHost);
+        $requestHost = trim($requestHost, '/');
 
         // تطابق دقیق یا زیردامنه
         return $allowed === $requestFull
             || $allowed === $requestHost
             || str_ends_with($requestHost, '.' . $allowed);
     }
-
     /**
      * دریافت لایسنس فعال مشتری برای یک پکیج
      */
