@@ -169,6 +169,9 @@ checkout در `Shop\PackageShow::buy()`: کد آپدیت → Customer → گار
 10. **route:cache** روی این اپ کار نمی‌کرد (closure route) — بعد از حذف closure `/` احتمالاً کار می‌کند ولی در dev نیازی نیست.
 11. **agent-browser**: eval با $wire را در کوتیشن تکی بدهید (bash $wire را می‌خورد)؛ اسکرین‌شات full-page مودال‌های fixed را برش می‌زند → `scrollintoview` + viewport screenshot.
 12. **rebuild فرانت**: بعد از هر تغییر `resources/js` یا `resources/css` → `bun run build` وگرنه `public/build` قدیمی سرو می‌شود.
+13. **`$errors` همیشه باید share شود**: `AppServiceProvider::boot()` یک `View::share('errors', new ViewErrorBag)` پایه ست می‌کند. دلیل: Livewire در هر رندر `shareWithViews('errors', …)` می‌زند و اگر قبلاً چیزی share نشده باشد ('notfound')، پس از رندر آن را **unset** می‌کند → در رندرهای بعدی همان request «Undefined variable $errors» می‌شود (روی هاست‌هایی که middleware وب کامل اجرا نمی‌شود دیده شد). علاوه بر این، فایل‌های کلیدی (field/ckeditor/settings/packages-show) با الگوی `$errors ?? null` + `?->has` هم مقاوم شده‌اند.
+14. **x-field کلید خطا**: کلیدهای اعتبارسنجی Livewire با پیشوند کامل ذخیره می‌شوند (`form.site_name`) ولی x-field فقط `for` ساده را می‌شناخت → حالا کاندیدها: `$error` صریح، `$for`، و `form.$for`.
+15. **استقرار روی هاست اشتراکی (cPanel)**: اگر استایل‌ها نصفه/بدون padding لود شدند، CSS ساخته‌شده را چک کنید: docroot دامنه باید **روی پوشه `public`** باشد (نه ریشه پروژه) وگرنه `/build/assets/*` که URL مطلق است 404 می‌شود؛ بعد از تغییر فایل‌های ساخت، `php artisan view:clear` + هارد‌ریفرش (Ctrl+Shift+R) مرورگر.
 
 ---
 

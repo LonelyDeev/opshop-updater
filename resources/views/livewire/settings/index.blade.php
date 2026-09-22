@@ -1,6 +1,4 @@
-@php
-    $errors = $this->errors ?? new \Illuminate\Support\ViewErrorBag;
-@endphp
+@php($errBag = $errors ?? new \Illuminate\Support\ViewErrorBag)
 <div class="space-y-6">
     {{-- header --}}
     <div class="flex flex-wrap items-center justify-between gap-4">
@@ -22,16 +20,16 @@
         <x-card title="تنظیمات عمومی" subtitle="اطلاعات پایه سایت که در پنل و ایمیل‌های سیستمی استفاده می‌شود.">
             <div class="grid gap-5 sm:grid-cols-2">
                 <x-field label="نام سایت" for="site_name" required>
-                    <x-input id="site_name" wire:model="form.site_name" placeholder="پنل مدیریت آپدیت" icon="globe" class="{{ $errors->has('form.site_name') ? 'input-error' : '' }}" />
+                    <x-input id="site_name" wire:model="form.site_name" placeholder="پنل مدیریت آپدیت" icon="globe" class="{{ $errBag->has('form.site_name') ? 'input-error' : '' }}" />
                 </x-field>
 
                 <x-field label="لوگو (URL)" for="site_logo" hint="آدرس تصویر لوگوی سایت (اختیاری).">
-                    <x-input id="site_logo" wire:model="form.site_logo" placeholder="https://example.com/logo.png" icon="image" dir="ltr" class="{{ $errors->has('form.site_logo') ? 'input-error' : '' }}" />
+                    <x-input id="site_logo" wire:model="form.site_logo" placeholder="https://example.com/logo.png" icon="image" dir="ltr" class="{{ $errBag->has('form.site_logo') ? 'input-error' : '' }}" />
                 </x-field>
 
                 <div class="sm:col-span-2">
                     <x-field label="توضیحات کوتاه سایت" for="site_description">
-                        <x-textarea id="site_description" wire:model="form.site_description" rows="3" placeholder="توضیح کوتاهی درباره سرویس…" class="{{ $errors->has('form.site_description') ? 'input-error' : '' }}" />
+                        <x-textarea id="site_description" wire:model="form.site_description" rows="3" placeholder="توضیح کوتاهی درباره سرویس…" class="{{ $errBag->has('form.site_description') ? 'input-error' : '' }}" />
                     </x-field>
                 </div>
 
@@ -40,7 +38,7 @@
                         <input type="color" id="theme_color" wire:model="form.theme_color"
                                class="h-10 w-16 shrink-0 cursor-pointer rounded-xl border border-zinc-300 bg-white p-1 dark:border-zinc-700 dark:bg-zinc-800" />
                         <input type="text" wire:model="form.theme_color" dir="ltr" placeholder="#10b981"
-                               class="input font-mono {{ $errors->has('form.theme_color') ? 'input-error' : '' }}" />
+                               class="input font-mono {{ $errBag->has('form.theme_color') ? 'input-error' : '' }}" />
                     </div>
                 </x-field>
             </div>
@@ -55,27 +53,27 @@
 
                 <div class="grid gap-5 sm:grid-cols-2">
                     <x-field label="آدرس ایمیل فرستنده" for="mail_from_address">
-                        <x-input id="mail_from_address" wire:model="form.mail_from_address" type="email" placeholder="no-reply@example.com" icon="mail" dir="ltr" class="{{ $errors->has('form.mail_from_address') ? 'input-error' : '' }}" />
+                        <x-input id="mail_from_address" wire:model="form.mail_from_address" type="email" placeholder="no-reply@example.com" icon="mail" dir="ltr" class="{{ $errBag->has('form.mail_from_address') ? 'input-error' : '' }}" />
                     </x-field>
 
                     <x-field label="نام فرستنده" for="mail_from_name">
-                        <x-input id="mail_from_name" wire:model="form.mail_from_name" placeholder="پنل مدیریت آپدیت" icon="user" class="{{ $errors->has('form.mail_from_name') ? 'input-error' : '' }}" />
+                        <x-input id="mail_from_name" wire:model="form.mail_from_name" placeholder="پنل مدیریت آپدیت" icon="user" class="{{ $errBag->has('form.mail_from_name') ? 'input-error' : '' }}" />
                     </x-field>
 
                     <x-field label="SMTP Host" for="mail_host">
-                        <x-input id="mail_host" wire:model="form.mail_host" placeholder="smtp.example.com" icon="server" dir="ltr" class="{{ $errors->has('form.mail_host') ? 'input-error' : '' }}" />
+                        <x-input id="mail_host" wire:model="form.mail_host" placeholder="smtp.example.com" icon="server" dir="ltr" class="{{ $errBag->has('form.mail_host') ? 'input-error' : '' }}" />
                     </x-field>
 
                     <x-field label="SMTP Port" for="mail_port">
-                        <x-input id="mail_port" wire:model="form.mail_port" type="number" placeholder="587" icon="lock" dir="ltr" class="{{ $errors->has('form.mail_port') ? 'input-error' : '' }}" />
+                        <x-input id="mail_port" wire:model="form.mail_port" type="number" placeholder="587" icon="lock" dir="ltr" class="{{ $errBag->has('form.mail_port') ? 'input-error' : '' }}" />
                     </x-field>
 
                     <x-field label="SMTP Username" for="mail_username">
-                        <x-input id="mail_username" wire:model="form.mail_username" placeholder="username" icon="user" dir="ltr" class="{{ $errors->has('form.mail_username') ? 'input-error' : '' }}" />
+                        <x-input id="mail_username" wire:model="form.mail_username" placeholder="username" icon="user" dir="ltr" class="{{ $errBag->has('form.mail_username') ? 'input-error' : '' }}" />
                     </x-field>
 
                     <x-field label="SMTP Password" for="mail_password">
-                        <x-input id="mail_password" wire:model="form.mail_password" type="password" placeholder="••••••••" icon="key" dir="ltr" class="{{ $errors->has('form.mail_password') ? 'input-error' : '' }}" />
+                        <x-input id="mail_password" wire:model="form.mail_password" type="password" placeholder="••••••••" icon="key" dir="ltr" class="{{ $errBag->has('form.mail_password') ? 'input-error' : '' }}" />
                     </x-field>
                 </div>
             </div>

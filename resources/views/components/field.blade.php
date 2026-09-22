@@ -22,10 +22,16 @@
         <p class="text-xs leading-5 text-zinc-500 dark:text-zinc-400">{{ $hint }}</p>
     @endif
 
-    @error($error ?? $for)
+    {{-- نمایش خطای اعتبارسنجی — مقاوم در برابر نبود $errors (با ?? حتی اگر تعریف نشده باشد خطا نمی‌دهد)
+         کلیدهای کاندید: error صریح، for ساده و for با پیشوند form. (Livewire اعتبارسنجی را با کلید کامل ثبت می‌کند) --}}
+    @php($fieldErrorBag = $errors ?? null)
+    @php($fieldErrorKey = $fieldErrorBag
+        ? collect([$error, $for, $for ? 'form.' . $for : null])->filter()->first(fn ($c) => $fieldErrorBag->has($c))
+        : null)
+    @if($fieldErrorKey)
         <p class="flex items-center gap-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
             <x-icon name="alert-circle" class="size-3.5 shrink-0" />
-            {{ $message }}
+            {{ $fieldErrorBag->first($fieldErrorKey) }}
         </p>
-    @enderror
+    @endif
 </div>

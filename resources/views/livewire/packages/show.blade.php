@@ -672,12 +672,13 @@
                     @endif
                 @endif
                 <input type="file" accept=".zip,application/zip" wire:model="versionFile" class="input" />
-                @error('versionFile')
+                @php($vfErrBag = $errors ?? null)
+                @if($vfErrBag?->has('versionFile'))
                     <p class="flex items-center gap-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
                         <x-icon name="alert-circle" class="size-3.5" />
-                        {{ $message }}
+                        {{ $vfErrBag->first('versionFile') }}
                     </p>
-                @enderror
+                @endif
                 <div wire:loading wire:target="versionFile" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
                     <x-icon name="loader" class="size-4 animate-spin" />
                     در حال آپلود…

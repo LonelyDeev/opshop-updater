@@ -29,11 +29,12 @@
     <textarea x-ref="target" wire:model="{{ $model }}" class="hidden" rows="8"></textarea>
 
     @if($error)
-        @error($error)
+        @php($ckErrBag = $errors ?? null)
+        @if($ckErrBag?->has($error))
             <p class="flex items-center gap-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
                 <x-icon name="alert-circle" class="size-3.5 shrink-0" />
-                {{ $message }}
+                {{ $ckErrBag->first($error) }}
             </p>
-        @enderror
+        @endif
     @endif
 </div>
