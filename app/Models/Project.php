@@ -49,6 +49,12 @@ class Project extends Model
         return $this->hasMany(Update::class);
     }
 
+    // رابطه با پکیج‌ها
+    public function packages(): HasMany
+    {
+        return $this->hasMany(Package::class);
+    }
+
     // اسکوپ برای پروژه‌های فعال
     public function scopeActive($query)
     {

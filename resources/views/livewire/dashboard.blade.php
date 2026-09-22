@@ -1,0 +1,239 @@
+<div class="space-y-6">
+    {{-- welcome --}}
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+            <h2 class="text-xl font-black text-zinc-900 dark:text-zinc-50">سلام {{ auth()->user()?->name }}، خوش برگشتی 👋</h2>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">نمای کلی سیستم امروز — {{ verta_date(now(), 'l d F Y') }}</p>
+        </div>
+        <x-btn href="{{ route('admin.packages.index') }}" icon="package" variant="secondary">
+            مشاهده پکیج‌ها
+        </x-btn>
+    </div>
+
+    {{-- stats --}}
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        @foreach($this->stats as $stat)
+            <x-stat :label="$stat['label']" :value="fa_num($stat['value'])" :icon="$stat['icon']"
+                    :variant="$stat['variant']" :hint="$stat['hint']" :href="$stat['href']" />
+        @endforeach
+    </div>
+
+    {{-- revenue + charts --}}
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <x-card class="xl:col-span-2" padding="p-5">
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <x-chart :title="$this->customerChart['title']" :series="$this->customerChart['series']" color="brand" />
+                <x-chart :title="$this->purchaseChart['title']" :series="$this->purchaseChart['series']" color="teal" />
+            </div>
+
+            {{-- updates status pills --}}
+            <div class="mt-6 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                <span class="me-1 flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                    <x-icon name="git-branch" class="size-3.5" />
+                    وضعیت آپدیت‌ها:
+                </span>
+                <x-badge variant="success" icon="check-circle">فعال {{ fa_num($this->updatesBreakdown['active']) }}</x-badge>
+                <x-badge variant="warning" icon="pencil">پیش‌نویس {{ fa_num($this->updatesBreakdown['draft']) }}</x-badge>
+                <x-badge variant="neutral" icon="archive">بایگانی {{ fa_num($this->updatesBreakdown['archived']) }}</x-badge>
+            </div>
+        </x-card>
+
+        {{-- revenue card --}}
+        <x-card title="درآمد و فروش">
+            <div class="space-y-4">
+                <div class="rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 p-5 text-white shadow-lg shadow-brand-500/20">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-medium text-brand-50/90">درآمد کل</p>
+                        <x-icon name="wallet" class="size-5 text-brand-50/90" />
+                    </div>
+                    <p class="mt-2 text-2xl font-black tabular-nums">{{ money($this->revenue['total']) }}</p>
+                    <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                        <div class="rounded-xl bg-white/10 px-3 py-2.5 backdrop-blur">
+                            <p class="text-brand-50/80">اشتراک‌ها</p>
+                            <p class="mt-0.5 font-bold tabular-nums">{{ money($this->revenue['subscriptions'], false) }}</p>
+                        </div>
+                        <div class="rounded-xl bg-white/10 px-3 py-2.5 backdrop-blur">
+                            <p class="text-brand-50/80">پکیج‌ها</p>
+                            <p class="mt-0.5 font-bold tabular-nums">{{ money($this->revenue['packages'], false) }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/80 dark:bg-zinc-800/60 dark:ring-zinc-700">
+                        <div class="flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
+                            <x-icon name="check-circle" class="size-4 text-emerald-500" />
+                            <p class="text-xs font-medium">خرید موفق</p>
+                        </div>
+                        <p class="mt-1.5 text-lg font-black tabular-nums text-zinc-900 dark:text-zinc-50">{{ fa_num($this->revenue['paid_purchases']) }}</p>
+                    </div>
+                    <div class="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/80 dark:bg-zinc-800/60 dark:ring-zinc-700">
+                        <div class="flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
+                            <x-icon name="clock" class="size-4 text-amber-500" />
+                            <p class="text-xs font-medium">در انتظار پرداخت</p>
+                        </div>
+                        <p class="mt-1.5 text-lg font-black tabular-nums text-zinc-900 dark:text-zinc-50">{{ fa_num($this->revenue['pending_purchases']) }}</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-200/80 dark:bg-zinc-800/60 dark:ring-zinc-700">
+                    <div class="flex items-center gap-2.5">
+                        <x-icon name="download" class="size-4.5 text-brand-600 dark:text-brand-400" />
+                        <p class="text-sm font-medium text-zinc-700 dark:text-zinc-300">مجموع دانلودها</p>
+                    </div>
+                    <p class="font-black tabular-nums text-zinc-900 dark:text-zinc-50">{{ fa_num($this->revenue['downloads']) }}</p>
+                </div>
+            </div>
+        </x-card>
+    </div>
+
+    {{-- recent + top + expiring --}}
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        {{-- recent purchases --}}
+        <x-card title="آخرین خریدها" subtitle="خریدهای موفق پکیج‌ها">
+            <div class="-my-2 divide-y divide-zinc-100 dark:divide-zinc-800">
+                @forelse($this->recentPurchases as $purchase)
+                    <div class="flex items-center gap-3 py-2.5">
+                        <x-icon name="package" class="size-4 shrink-0 text-zinc-400" />
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-semibold text-zinc-700 dark:text-zinc-200">{{ $purchase->package?->name ?? '—' }}</p>
+                            <p class="truncate text-xs text-zinc-500">{{ $purchase->customer?->name }} · {{ verta_date($purchase->paid_at) }}</p>
+                        </div>
+                        <span class="shrink-0 text-xs font-bold tabular-nums text-brand-600 dark:text-brand-400">{{ money($purchase->amount, false) }}</span>
+                    </div>
+                @empty
+                    <x-empty icon="receipt" title="هنوز خریدی ثبت نشده" description="خریدهای مشتریان از طریق API اینجا نمایش داده می‌شوند." class="py-8" />
+                @endforelse
+            </div>
+        </x-card>
+
+        {{-- top packages --}}
+        <x-card title="پکیج‌های پرفروش">
+            <div class="-my-2 divide-y divide-zinc-100 dark:divide-zinc-800">
+                @forelse($this->topPackages as $package)
+                    <a href="{{ route('admin.packages.show', $package) }}" wire:navigate class="group flex items-center gap-3 py-2.5">
+                        <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-xs font-black text-zinc-500 group-hover:bg-brand-50 group-hover:text-brand-600 dark:bg-zinc-800 dark:text-zinc-400 dark:group-hover:bg-brand-500/10 dark:group-hover:text-brand-400">
+                            {{ fa_num($loop->iteration) }}
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-semibold text-zinc-700 group-hover:text-brand-600 dark:text-zinc-200 dark:group-hover:text-brand-400">{{ $package->name }}</p>
+                            <p class="flex items-center gap-2 text-xs text-zinc-500">
+                                {{ fa_num($package->purchases_count) }} خرید
+                                <span class="text-zinc-300 dark:text-zinc-600">·</span>
+                                {{ fa_num($package->downloads_count) }} دانلود
+                            </p>
+                        </div>
+                        <x-icon name="chevron-left" class="size-4 shrink-0 text-zinc-300 transition-transform group-hover:-translate-x-0.5 group-hover:text-brand-500" />
+                    </a>
+                @empty
+                    <x-empty icon="package" title="پکیجی ثبت نشده" class="py-8" />
+                @endforelse
+            </div>
+        </x-card>
+
+        {{-- expiring licenses --}}
+        <x-card title="لایسنس‌های در حال انقضا" subtitle="۱۴ روز آینده">
+            <div class="-my-2 divide-y divide-zinc-100 dark:divide-zinc-800">
+                @forelse($this->expiringLicenses as $license)
+                    <div class="flex items-center gap-3 py-2.5">
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                            <x-icon name="clock" class="size-4.5" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-semibold text-zinc-700 dark:text-zinc-200">{{ $license->package?->name }}</p>
+                            <p class="truncate text-xs text-zinc-500">{{ $license->customer?->name }} · {{ verta_date($license->expires_at) }}</p>
+                        </div>
+                        <x-badge variant="warning">انقضا نزدیک</x-badge>
+                    </div>
+                @empty
+                    <x-empty icon="check-circle" title="همه چیز مرتب است" description="لایسنسی در ۱۴ روز آینده منقضی نمی‌شود." class="py-8" />
+                @endforelse
+            </div>
+        </x-card>
+    </div>
+
+    {{-- recent customers + recent updates --}}
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <x-card title="آخرین مشتریان ثبت‌شده">
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>مشتری</th>
+                            <th>وضعیت</th>
+                            <th class="hidden sm:table-cell">تلفن</th>
+                            <th>تاریخ عضویت</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($this->recentCustomers as $customer)
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-3">
+                                        <x-avatar :name="$customer->name" size="sm" />
+                                        <div class="min-w-0">
+                                            <p class="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ $customer->name }}</p>
+                                            <p class="truncate text-xs text-zinc-500">{{ $customer->email }}</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <x-badge variant="{{ $customer->status === 'active' ? 'success' : 'danger' }}">
+                                        {{ $customer->status === 'active' ? 'فعال' : 'غیرفعال' }}
+                                    </x-badge>
+                                </td>
+                                <td class="hidden text-sm tabular-nums text-zinc-600 dark:text-zinc-400 sm:table-cell" dir="ltr">{{ $customer->phone ?: '—' }}</td>
+                                <td class="text-sm text-zinc-500">{{ verta_date($customer->created_at) }}</td>
+                                <td>
+                                    <a href="{{ route('admin.customers.index') }}?search={{ urlencode($customer->name) }}" wire:navigate
+                                       class="text-zinc-400 transition-colors hover:text-brand-600" aria-label="مشاهده">
+                                        <x-icon name="chevron-left" class="size-4" />
+                                    </a>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5"><x-empty icon="users" title="مشتری‌ای ثبت نشده" class="py-8" /></td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </x-card>
+
+        {{-- recent updates --}}
+        <x-card title="آخرین آپدیت‌ها" subtitle="آخرین نسخه‌های فعال پروژه‌ها">
+            <div class="-my-2 divide-y divide-zinc-100 dark:divide-zinc-800">
+                @forelse($this->recentUpdates as $update)
+                    @php($statusVariant = match($update->status) {
+                        'active' => 'success',
+                        'draft' => 'warning',
+                        default => 'neutral',
+                    })
+                    @php($statusLabel = \App\Models\Update::getStatuses()[$update->status] ?? $update->status)
+                    <div class="flex items-center gap-3 py-2.5">
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                            <x-icon name="git-branch" class="size-4.5" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ $update->title }}</p>
+                            <p class="truncate text-xs text-zinc-500">{{ $update->project?->name ?? '—' }} · {{ verta_date($update->release_date) }}</p>
+                        </div>
+                        <div class="flex shrink-0 items-center gap-1.5">
+                            <x-badge variant="primary"><span dir="ltr" class="font-mono">{{ $update->version }}</span></x-badge>
+                            <x-badge :variant="$statusVariant">{{ $statusLabel }}</x-badge>
+                        </div>
+                    </div>
+                @empty
+                    <x-empty icon="git-branch" title="هنوز آپدیتی منتشر نشده" description="آپدیت‌های فعال پروژه‌ها اینجا نمایش داده می‌شوند." class="py-8" />
+                @endforelse
+            </div>
+            @if($this->recentUpdates->isNotEmpty())
+                <a href="{{ route('admin.updates.index') }}" wire:navigate
+                   class="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-zinc-50 py-2.5 text-xs font-semibold text-zinc-600 transition-colors hover:bg-brand-50 hover:text-brand-600 dark:bg-zinc-800/60 dark:text-zinc-300 dark:hover:bg-brand-500/10 dark:hover:text-brand-400">
+                    مشاهده همه آپدیت‌ها
+                    <x-icon name="chevron-left" class="size-3.5" />
+                </a>
+            @endif
+        </x-card>
+    </div>
+</div>

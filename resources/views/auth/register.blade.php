@@ -1,77 +1,42 @@
-@extends('layouts.app')
+<x-layouts.guest title="ایجاد حساب کاربری">
+    <div class="card animate-slide-up bg-white/95 p-6 backdrop-blur dark:bg-zinc-900/95 sm:p-8">
+        <form method="POST" action="{{ route('register') }}" class="space-y-5">
+            @csrf
 
-@section('content')
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">{{ __('Register') }}</div>
+            <x-field label="نام و نام خانوادگی" for="name" required>
+                <x-input id="name" type="text" name="name" :value="old('name')" icon="user" placeholder="مثلاً علی رضایی" required autofocus
+                         :class="$errors->has('name') ? 'input-error' : ''" />
+            </x-field>
 
-                <div class="card-body">
-                    <form method="POST" action="{{ route('register') }}">
-                        @csrf
+            <x-field label="ایمیل" for="email" required>
+                <x-input id="email" type="email" name="email" :value="old('email')" icon="mail" placeholder="you@example.com" required
+                         :class="$errors->has('email') ? 'input-error' : ''" />
+            </x-field>
 
-                        <div class="row mb-3">
-                            <label for="name" class="col-md-4 col-form-label text-md-end">{{ __('Name') }}</label>
+            <x-field label="گذرواژه" for="password" required>
+                <x-input id="password" type="password" name="password" icon="lock" placeholder="••••••••" required autocomplete="new-password"
+                         :class="$errors->has('password') ? 'input-error' : ''" />
+            </x-field>
 
-                            <div class="col-md-6">
-                                <input id="name" type="text" class="form-control @error('name') is-invalid @enderror" name="name" value="{{ old('name') }}" required autocomplete="name" autofocus>
+            <x-field label="تکرار گذرواژه" for="password-confirm" required>
+                <x-input id="password-confirm" type="password" name="password_confirmation" icon="lock" placeholder="••••••••" required autocomplete="new-password" />
+            </x-field>
 
-                                @error('name')
-                                    <span class="invalid-feedback" role="alert">
-                                        <strong>{{ $message }}</strong>
-                                    </span>
-                                @enderror
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <label for="email" class="col-md-4 col-form-label text-md-end">{{ __('Email Address') }}</label>
-
-                            <div class="col-md-6">
-                                <input id="email" type="email" class="form-control @error('email') is-invalid @enderror" name="email" value="{{ old('email') }}" required autocomplete="email">
-
-                                @error('email')
-                                    <span class="invalid-feedback" role="alert">
-                                        <strong>{{ $message }}</strong>
-                                    </span>
-                                @enderror
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <label for="password" class="col-md-4 col-form-label text-md-end">{{ __('Password') }}</label>
-
-                            <div class="col-md-6">
-                                <input id="password" type="password" class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="new-password">
-
-                                @error('password')
-                                    <span class="invalid-feedback" role="alert">
-                                        <strong>{{ $message }}</strong>
-                                    </span>
-                                @enderror
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <label for="password-confirm" class="col-md-4 col-form-label text-md-end">{{ __('Confirm Password') }}</label>
-
-                            <div class="col-md-6">
-                                <input id="password-confirm" type="password" class="form-control" name="password_confirmation" required autocomplete="new-password">
-                            </div>
-                        </div>
-
-                        <div class="row mb-0">
-                            <div class="col-md-6 offset-md-4">
-                                <button type="submit" class="btn btn-primary">
-                                    {{ __('Register') }}
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+            @if($errors->any())
+                <div class="flex items-center gap-2.5 rounded-xl bg-rose-50 px-3.5 py-3 text-sm font-medium text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20" role="alert">
+                    <x-icon name="alert-circle" class="size-4.5 shrink-0" />
+                    {{ $errors->first() }}
                 </div>
-            </div>
-        </div>
+            @endif
+
+            <x-btn type="submit" class="w-full" size="lg" icon="user-plus">
+                ایجاد حساب
+            </x-btn>
+        </form>
+
+        <p class="mt-5 text-center text-sm text-zinc-500">
+            قبلاً ثبت‌نام کرده‌اید؟
+            <a href="{{ route('login') }}" class="link">وارد شوید</a>
+        </p>
     </div>
-</div>
-@endsection
+</x-layouts.guest>

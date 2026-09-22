@@ -1,88 +1,39 @@
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ورود به پنل مدیریت</title>
-    <!-- فونت وزیرمتن -->
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
-    <!-- آیکون‌ها -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- استایل اختصاصی -->
-    <link rel="stylesheet" href="{{ asset('back/assets/css/auth-style.css') }}">
-</head>
-<body>
-<div class="login-container">
-    <div class="login-box">
-        <div class="login-header">
-            <div class="logo-circle">
-                <i class="fa-solid fa-shield-halved"></i>
-            </div>
-            <h2>پنل مدیریت آپدیت</h2>
-            <p>برای ادامه وارد حساب خود شوید</p>
-        </div>
-
-        @if ($errors->any())
-            <div class="alert alert-error">
-                <i class="fa-solid fa-circle-exclamation"></i>
-                <span>{{ $errors->first() }}</span>
-            </div>
-        @endif
-
-        <form action="{{ route('login') }}" method="POST" class="login-form">
+<x-layouts.guest title="ورود به پنل مدیریت">
+    <div class="card animate-slide-up bg-white/95 p-6 backdrop-blur dark:bg-zinc-900/95 sm:p-8">
+        <form method="POST" action="{{ route('login') }}" class="space-y-5">
             @csrf
 
-            <div class="input-group">
-                <label for="email">ایمیل</label>
-                <div class="input-wrapper">
-                    <i class="fa-solid fa-envelope input-icon"></i>
-                    <input type="email" id="email" name="email" value="{{ old('email') }}" placeholder="example@mail.com" required autofocus>
+            <x-field label="ایمیل" for="email" required :error="'email'">
+                <x-input id="email" type="email" name="email" :value="old('email')" icon="mail" placeholder="admin@example.com"
+                         required autofocus autocomplete="email" :class="$errors->has('email') ? 'input-error' : ''" />
+            </x-field>
+
+            <x-field label="گذرواژه" for="password" required :error="'password'">
+                <x-input id="password" type="password" name="password" icon="lock" placeholder="••••••••"
+                         required autocomplete="current-password" :class="$errors->has('password') ? 'input-error' : ''" />
+            </x-field>
+
+            <label class="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-600 dark:text-zinc-400">
+                <input type="checkbox" name="remember" value="1" class="checkbox" {{ old('remember') ? 'checked' : '' }}>
+                مرا به خاطر بسپار
+            </label>
+
+            @if($errors->any())
+                <div class="flex items-center gap-2.5 rounded-xl bg-rose-50 px-3.5 py-3 text-sm font-medium text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20" role="alert">
+                    <x-icon name="alert-circle" class="size-4.5 shrink-0" />
+                    {{ $errors->first() }}
                 </div>
-            </div>
+            @endif
 
-            <div class="input-group">
-                <label for="password">رمز عبور</label>
-                <div class="input-wrapper">
-                    <i class="fa-solid fa-lock input-icon"></i>
-                    <input type="password" id="password" name="password" placeholder="********" required>
-                    <i class="fa-solid fa-eye toggle-password" id="togglePassword"></i>
-                </div>
-            </div>
-
-            <div class="options">
-                <label class="checkbox-container">
-                    <input type="checkbox" name="remember">
-                    <span class="checkmark"></span>
-                    مرا به خاطر بسپار
-                </label>
-                <a href="#" class="forgot-link">رمز عبور را فراموش کرده‌اید؟</a>
-            </div>
-
-            <button type="submit" class="btn-login">
+            <x-btn type="submit" class="w-full" size="lg" icon="log-in">
                 ورود به پنل
-                <i class="fa-solid fa-arrow-left"></i>
-            </button>
+            </x-btn>
         </form>
 
-        <div class="login-footer">
-            <p>&copy; {{ date('Y') }} تمامی حقوق محفوظ است.</p>
-        </div>
+        @if(\Illuminate\Support\Facades\Route::has('password.request'))
+            <p class="mt-5 text-center text-sm">
+                <a href="{{ route('password.request') }}" class="link">گذرواژه‌ام را فراموش کرده‌ام</a>
+            </p>
+        @endif
     </div>
-
-    <!-- المان‌های تزئینی پس‌زمینه -->
-    <div class="background-shape shape-1"></div>
-    <div class="background-shape shape-2"></div>
-</div>
-
-<script>
-    const togglePassword = document.querySelector('#togglePassword');
-    const password = document.querySelector('#password');
-
-    togglePassword.addEventListener('click', function () {
-        const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
-        password.setAttribute('type', type);
-        this.classList.toggle('fa-eye-slash');
-    });
-</script>
-</body>
-</html>
+</x-layouts.guest>

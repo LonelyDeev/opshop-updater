@@ -57,7 +57,7 @@ class PackageLicense extends Model
 
     public function downloadTokens(): HasMany
     {
-        return $this->hasMany(PackageDownloadToken::class);
+        return $this->hasMany(PackageDownloadToken::class, 'license_id');
     }
 
     /* ---------------- Helpers ---------------- */

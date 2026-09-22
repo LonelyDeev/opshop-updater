@@ -116,7 +116,7 @@ class Package extends Model
     {
         // اگر thumbnail وجود ندارد
         if (!$this->thumbnail) {
-            return asset('back/assets/images/package-default.png');
+            return asset('images/package-default.png');
         }
 
         // اگر URL کامل است (شروع با http)
@@ -130,7 +130,7 @@ class Package extends Model
         }
 
         // تصویر پیش‌فرض
-        return asset('back/assets/images/package-default.png');
+        return asset('images/package-default.png');
     }
 
     /**

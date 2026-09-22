@@ -246,7 +246,7 @@ trait HasAttributes
         // as these attributes are not really in the attributes array, but are run
         // when we need to array or JSON the model for convenience to the coder.
         foreach ($this->getArrayableAppends() as $key) {
-            $attributes[$key] = $this->mutateAttributeForArray($key, null);
+            $attributes[$key] = $this->mutateAttributeForArray($key, $this->getAttributeFromArray($key));
         }
 
         return $attributes;
@@ -520,11 +520,13 @@ trait HasAttributes
         if ($this->exists &&
             ! $this->wasRecentlyCreated &&
             static::preventsAccessingMissingAttributes()) {
+            $exception = new MissingAttributeException($this, $key);
+
             if (isset(static::$missingAttributeViolationCallback)) {
-                return call_user_func(static::$missingAttributeViolationCallback, $this, $key);
+                return call_user_func(static::$missingAttributeViolationCallback, $this, $key, $exception);
             }
 
-            throw new MissingAttributeException($this, $key);
+            throw $exception;
         }
 
         return null;
@@ -613,15 +615,19 @@ trait HasAttributes
      */
     protected function handleLazyLoadingViolation($key)
     {
+        $exception = new LazyLoadingViolationException($this, $key);
+
         if (isset(static::$lazyLoadingViolationCallback)) {
-            return call_user_func(static::$lazyLoadingViolationCallback, $this, $key);
+            return call_user_func(
+                static::$lazyLoadingViolationCallback, $this, $key, $exception
+            );
         }
 
         if (! $this->exists || $this->wasRecentlyCreated) {
             return;
         }
 
-        throw new LazyLoadingViolationException($this, $key);
+        throw $exception;
     }
 
     /**
@@ -634,7 +640,7 @@ trait HasAttributes
      */
     protected function getRelationshipFromMethod($method)
     {
-        $relation = $this->$method();
+        $relation = Relation::withConstraintsForNestedRelation(fn () => $this->$method());
 
         if (! $relation instanceof Relation) {
             if (is_null($relation)) {
@@ -2084,7 +2090,7 @@ trait HasAttributes
     public function getOriginal($key = null, $default = null)
     {
         return (new static)->setRawAttributes(
-            $this->original, $sync = true
+            $this->original, sync: true
         )->getOriginalWithoutRewindingModel($key, $default);
     }
 

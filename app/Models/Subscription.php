@@ -15,6 +15,7 @@ class Subscription extends Model
         'customer_id',
         'project_id',
         'start_date',
+        'end_date',
         'expires_at',
         'status',
         'price',
@@ -26,6 +27,7 @@ class Subscription extends Model
 
     protected $casts = [
         'start_date' => 'date',
+        'end_date' => 'date',
         'expires_at' => 'datetime',
         'price' => 'decimal:2',
         'discount' => 'decimal:2',

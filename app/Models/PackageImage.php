@@ -35,7 +35,7 @@ class PackageImage extends Model
     public function getUrlAttribute(): string
     {
         if (!$this->path) {
-            return asset('back/assets/images/default-image.png');
+            return asset('images/default-image.png');
         }
 
         // اگر URL کامل است
@@ -48,7 +48,7 @@ class PackageImage extends Model
             return asset($this->path);
         }
 
-        return asset('back/assets/images/default-image.png');
+        return asset('images/default-image.png');
     }
 
     public function getSizeHumanAttribute(): string

@@ -10,6 +10,7 @@
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
         "laravel/ui": "*",
+        "livewire/livewire": "^3.0",
         "morilog/jalali": "^3.5",
         "shetabit/payment": "^6.4"
     },

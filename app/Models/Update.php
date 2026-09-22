@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Update extends Model
@@ -52,6 +53,11 @@ class Update extends Model
             self::STATUS_ACTIVE => 'فعال',
             self::STATUS_ARCHIVED => 'بایگانی شده',
         ];
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     public function scopeActive($query)

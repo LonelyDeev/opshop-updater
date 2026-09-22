@@ -1,11 +1,188 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-@source '../**/*.blade.php';
-@source '../**/*.js';
+/* Explicit sources – guarantee class extraction from Blade/JS/PHP files */
+@source "../views";
+@source "../js";
+@source "../../app";
+@source "../../config";
+
+/* ------------------------------------------------------------------ */
+/*  Vazirmatn – local variable + static weights                        */
+/* ------------------------------------------------------------------ */
+@font-face {
+    font-family: "Vazirmatn";
+    src: url("../fonts/Vazirmatn[wght].woff2") format("woff2 supports variations"),
+         url("../fonts/Vazirmatn[wght].woff2") format("woff2-variations");
+    font-weight: 100 900;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Vazirmatn Fallback";
+    src: url("../fonts/Vazirmatn-Regular.woff2") format("woff2");
+    font-weight: 400;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Vazirmatn Fallback";
+    src: url("../fonts/Vazirmatn-SemiBold.woff2") format("woff2");
+    font-weight: 600;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Vazirmatn Fallback";
+    src: url("../fonts/Vazirmatn-Bold.woff2") format("woff2");
+    font-weight: 700;
+    font-display: swap;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Design tokens                                                      */
+/* ------------------------------------------------------------------ */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: "Vazirmatn", "Vazirmatn Fallback", "Segoe UI", Tahoma, ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --color-brand-50: #ecfdf5;
+    --color-brand-100: #d1fae5;
+    --color-brand-200: #a7f3d0;
+    --color-brand-300: #6ee7b7;
+    --color-brand-400: #34d399;
+    --color-brand-500: #10b981;
+    --color-brand-600: #059669;
+    --color-brand-700: #047857;
+    --color-brand-800: #065f46;
+    --color-brand-900: #064e3b;
+    --color-brand-950: #022c22;
+
+    --radius-card: 1rem;
+
+    --shadow-card: 0 1px 2px 0 rgb(9 9 11 / 0.04), 0 1px 3px 0 rgb(9 9 11 / 0.06);
+    --shadow-card-lg: 0 4px 6px -1px rgb(9 9 11 / 0.05), 0 10px 24px -4px rgb(9 9 11 / 0.08);
+    --shadow-pop: 0 10px 38px -10px rgb(9 9 11 / 0.25), 0 10px 20px -15px rgb(9 9 11 / 0.2);
+
+    --animate-scale-in: scale-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    --animate-fade-in: fade-in 0.2s ease-out;
+    --animate-slide-up: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    --animate-slide-in-start: slide-in-start 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+    @keyframes scale-in {
+        from { opacity: 0; transform: scale(0.96) translateY(6px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    @keyframes slide-up {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slide-in-start {
+        from { opacity: 0; transform: translateX(-24px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Base                                                               */
+/* ------------------------------------------------------------------ */
+@layer base {
+    html { scroll-behavior: smooth; }
+
+    body {
+        @apply bg-zinc-100 text-zinc-700 antialiased dark:bg-zinc-950 dark:text-zinc-300;
+        font-feature-settings: "ss01";
+    }
+
+    ::selection { @apply bg-brand-500/25; }
+
+    [x-cloak] { display: none !important; }
+
+    /* Slim scrollbars */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(161 161 170 / .45) transparent;
+    }
+    *::-webkit-scrollbar { width: 6px; height: 6px; }
+    *::-webkit-scrollbar-thumb { @apply rounded-full bg-zinc-400/50; }
+    *::-webkit-scrollbar-thumb:hover { @apply bg-zinc-400/80; }
+    *::-webkit-scrollbar-track { background: transparent; }
+
+    /* Numeric fields keep LTR */
+    input[type="number"], .dir-ltr { direction: ltr; }
+    .dir-ltr input { direction: ltr; }
+
+    input[type="file"]::file-selector-button { cursor: pointer; }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Reusable component primitives                                      */
+/*  (structure lives in Blade components – these keep markup DRY)      */
+/* ------------------------------------------------------------------ */
+@layer components {
+    /* --- form controls ------------------------------------------------- */
+    .input {
+        @apply w-full rounded-xl border border-zinc-300/80 bg-white px-3.5 py-2.5 text-sm text-zinc-800 shadow-xs
+               transition-all duration-150 placeholder:text-zinc-400
+               focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none
+               hover:border-zinc-400
+               dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:placeholder:text-zinc-500
+               dark:hover:border-zinc-600 dark:focus:border-brand-500;
+    }
+    .input:disabled { @apply cursor-not-allowed bg-zinc-100 opacity-70 dark:bg-zinc-800; }
+    .input-error { @apply border-rose-400 focus:border-rose-500 focus:ring-rose-500/15 dark:border-rose-500/60; }
+
+    select.input {
+        @apply cursor-pointer appearance-none bg-no-repeat py-2.5 pl-3.5 pr-9
+               dark:[background-image:none];
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m19 9-7 7-7-7'/%3E%3C/svg%3E");
+        background-position: left 0.75rem center;
+        background-size: 1em;
+    }
+
+    textarea.input { @apply min-h-[110px] leading-6; }
+
+    .checkbox {
+        @apply size-4 cursor-pointer rounded-md border-zinc-300 text-brand-600
+               focus:ring-2 focus:ring-brand-500/30 dark:border-zinc-600
+               dark:bg-zinc-800 dark:accent-brand-600;
+    }
+
+    /* --- table ---------------------------------------------------------- */
+    .table-wrap { @apply w-full overflow-x-auto rounded-(--radius-card) ring-1 ring-zinc-200/80 dark:ring-zinc-800; }
+    table.table { @apply w-full min-w-max border-collapse text-sm; }
+    table.table thead th {
+        @apply whitespace-nowrap border-b border-zinc-200/90 bg-zinc-50/80 px-4 py-3 text-start
+               font-semibold text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400;
+    }
+    table.table tbody td { @apply border-b border-zinc-100 px-4 py-3.5 dark:border-zinc-800/70; }
+    table.table tbody tr { @apply bg-white transition-colors dark:bg-zinc-900; }
+    table.table tbody tr:nth-child(even) { @apply bg-zinc-50/50 dark:bg-zinc-900/40; }
+    table.table tbody tr:last-child td { @apply border-b-0; }
+    table.table tbody tr:hover { @apply bg-brand-50/60 dark:bg-zinc-800/60; }
+
+    /* --- misc ----------------------------------------------------------- */
+    .card { @apply rounded-(--radius-card) bg-white shadow-card ring-1 ring-zinc-200/80 dark:bg-zinc-900 dark:ring-zinc-800; }
+
+    .link { @apply font-medium text-brand-600 transition-colors hover:text-brand-700 hover:underline dark:text-brand-400 dark:hover:text-brand-300; }
+
+    .kbd { @apply rounded-md border border-zinc-300 bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400; }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Page transition (wire:navigate)                                    */
+/* ------------------------------------------------------------------ */
+main.fade-enter { animation: fade-in 0.25s ease-out; }
+
+/* Livewire navigation progress bar */
+.livewire-progress {
+    position: fixed;
+    inset-inline-start: 0;
+    top: 0;
+    height: 3px;
+    z-index: 100;
+    background: linear-gradient(90deg, var(--color-brand-400), var(--color-brand-600));
+    transition: width 0.25s ease, opacity 0.4s ease;
 }

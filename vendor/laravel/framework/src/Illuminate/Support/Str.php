@@ -4,6 +4,7 @@ namespace Illuminate\Support;
 
 use Closure;
 use Illuminate\Support\Traits\Macroable;
+use InvalidArgumentException;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\Extension\GithubFlavoredMarkdownExtension;
 use League\CommonMark\Extension\InlinesOnly\InlinesOnlyExtension;
@@ -238,7 +239,7 @@ class Str
      */
     public static function camel($value)
     {
-        return static::$camelCache[$value] ?? static::$camelCache[$value] = lcfirst(static::studly($value));
+        return static::$camelCache[$value] ?? static::$camelCache[$value] = static::lcfirst(static::studly($value));
     }
 
     /**
@@ -470,14 +471,14 @@ class Str
 
         $start = ltrim($matches[1]);
 
-        $start = Str::of(mb_substr($start, max(mb_strlen($start, 'UTF-8') - $radius, 0), $radius, 'UTF-8'))->ltrim()->unless(
+        $start = (new Stringable(mb_substr($start, max(mb_strlen($start, 'UTF-8') - $radius, 0), $radius, 'UTF-8')))->ltrim()->unless(
             fn ($startWithRadius) => $startWithRadius->exactly($start),
             fn ($startWithRadius) => $startWithRadius->prepend($omission),
         );
 
         $end = rtrim($matches[3]);
 
-        $end = Str::of(mb_substr($end, 0, $radius, 'UTF-8'))->rtrim()->unless(
+        $end = (new Stringable(mb_substr($end, 0, $radius, 'UTF-8')))->rtrim()->unless(
             fn ($endWithRadius) => $endWithRadius->exactly($end),
             fn ($endWithRadius) => $endWithRadius->append($omission),
         );
@@ -956,12 +957,12 @@ class Str
     /**
      * Remove all non-numeric characters from a string.
      *
-     * @param  string  $value
-     * @return string
+     * @param  string|string[]  $value
+     * @return ($value is string ? string : string[])
      */
     public static function numbers($value)
     {
-        return preg_replace('/[^0-9]/', '', $value);
+        return preg_replace('/\D/', '', $value);
     }
 
     /**
@@ -1103,13 +1104,21 @@ class Str
             ] : null,
             'spaces' => $spaces === true ? [' '] : null,
         ]))
-            ->filter()
-            ->each(fn ($c) => $password->push($c[random_int(0, count($c) - 1)]))
-            ->flatten();
+            ->filter();
 
-        $length = $length - $password->count();
+        if ($options->isEmpty()) {
+            throw new InvalidArgumentException('At least one character pool must be enabled.');
+        }
 
-        return $password->merge($options->pipe(
+        $allCharacters = $options->flatten();
+
+        $options->shuffle()
+            ->take(max(0, $length))
+            ->each(fn ($c) => $password->push($c[random_int(0, count($c) - 1)]));
+
+        $length = max(0, $length - $password->count());
+
+        return $password->merge($allCharacters->pipe(
             fn ($c) => Collection::times($length, fn () => $c[random_int(0, $c->count() - 1)])
         ))->shuffle()->implode('');
     }
@@ -1286,7 +1295,54 @@ class Str
 
         return $caseSensitive
             ? str_replace($search, $replace, $subject)
-            : str_ireplace($search, $replace, $subject);
+            : static::replaceWhileIgnoringCase($search, $replace, $subject);
+    }
+
+    /**
+     * Replace the given value in the given string regardless of case.
+     *
+     * @param  string|string[]  $search
+     * @param  string|string[]  $replace
+     * @param  string|string[]  $subject
+     * @return string|string[]
+     */
+    protected static function replaceWhileIgnoringCase($search, $replace, $subject)
+    {
+        if (! is_array($search) && is_array($replace)) {
+            return str_ireplace($search, $replace, $subject);
+        }
+
+        $searches = is_array($search) ? array_values($search) : [$search];
+
+        if (array_all($searches, static::isAscii(...))) {
+            return str_ireplace($search, $replace, $subject);
+        }
+
+        $replacements = is_array($replace)
+            ? array_values($replace)
+            : array_fill(0, count($searches), $replace);
+
+        foreach ([...$searches, ...$replacements, ...(array) $subject] as $value) {
+            if (! preg_match('//u', (string) $value)) {
+                return str_ireplace($search, $replace, $subject);
+            }
+        }
+
+        foreach ($searches as $index => $term) {
+            $term = (string) $term;
+
+            if ($term === '') {
+                continue;
+            }
+
+            $replacement = (string) ($replacements[$index] ?? '');
+
+            $subject = static::isAscii($term)
+                ? str_ireplace($term, $replacement, $subject)
+                : preg_replace_callback('/'.preg_quote($term, '/').'/iu', fn () => $replacement, $subject);
+        }
+
+        return $subject;
     }
 
     /**
@@ -1419,7 +1475,7 @@ class Str
 
         return $caseSensitive
             ? str_replace($search, '', $subject)
-            : str_ireplace($search, '', $subject);
+            : static::replaceWhileIgnoringCase($search, '', $subject);
     }
 
     /**
@@ -1819,13 +1875,48 @@ class Str
      */
     public static function substrReplace($string, $replace, $offset = 0, $length = null)
     {
-        if ($length === null) {
-            $length = static::length($string);
+        if (! is_array($string) && (is_array($offset) || is_array($length))) {
+            return substr_replace($string, $replace, $offset, $length);
         }
 
-        return mb_substr($string, 0, $offset)
-            .$replace
-            .mb_substr(mb_substr($string, $offset), $length);
+        $replaceSubstring = function ($string, $replace, $offset, $length) {
+            if ($length === null) {
+                $length = static::length($string);
+            }
+
+            return mb_substr($string, 0, $offset)
+                .$replace
+                .mb_substr(mb_substr($string, $offset), $length);
+        };
+
+        $replacements = is_array($replace) ? array_values($replace) : null;
+
+        if (! is_array($string)) {
+            return $replaceSubstring(
+                $string,
+                $replacements === null ? $replace : ($replacements[0] ?? ''),
+                $offset,
+                $length,
+            );
+        }
+
+        $offsets = is_array($offset) ? array_values($offset) : null;
+        $lengths = is_array($length) ? array_values($length) : null;
+        $result = [];
+        $position = 0;
+
+        foreach ($string as $index => $value) {
+            $result[$index] = $replaceSubstring(
+                $value,
+                $replacements === null ? $replace : ($replacements[$position] ?? ''),
+                $offsets === null ? $offset : ($offsets[$position] ?? 0),
+                $lengths === null ? $length : ($lengths[$position] ?? null),
+            );
+
+            $position++;
+        }
+
+        return $result;
     }
 
     /**
@@ -1887,7 +1978,7 @@ class Str
      */
     public static function lcfirst($string)
     {
-        return static::lower(static::substr($string, 0, 1)).static::substr($string, 1);
+        return mb_lcfirst($string, 'UTF-8');
     }
 
     /**
@@ -1898,7 +1989,7 @@ class Str
      */
     public static function ucfirst($string)
     {
-        return static::upper(static::substr($string, 0, 1)).static::substr($string, 1);
+        return mb_ucfirst($string, 'UTF-8');
     }
 
     /**
@@ -1951,7 +2042,35 @@ class Str
      */
     public static function wordWrap($string, $characters = 75, $break = "\n", $cutLongWords = false)
     {
-        return wordwrap($string, $characters, $break, $cutLongWords);
+        if (static::isAscii($string)) {
+            return wordwrap($string, $characters, $break, $cutLongWords);
+        }
+
+        if ($break === '') {
+            return wordwrap($string, $characters, $break, $cutLongWords);
+        }
+
+        $replaced = [];
+
+        $skeleton = preg_replace_callback('/[\x80-\xFF][\x80-\xBF]*|\x1A/', function ($match) use (&$replaced) {
+            $replaced[] = $match[0];
+
+            return "\x1A";
+        }, $string);
+
+        $breakToken = "\0";
+
+        while (str_contains($skeleton, $breakToken)) {
+            $breakToken .= "\0";
+        }
+
+        $index = 0;
+
+        return implode($break, array_map(function ($segment) use (&$replaced, &$index) {
+            return preg_replace_callback('/\x1A/', function () use (&$replaced, &$index) {
+                return $replaced[$index++];
+            }, $segment);
+        }, explode($breakToken, wordwrap($skeleton, $characters, $breakToken, $cutLongWords))));
     }
 
     /**
