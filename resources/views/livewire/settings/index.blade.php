@@ -1,6 +1,3 @@
-@php
-    $errors = $this->errors ?? new \Illuminate\Support\ViewErrorBag;
-@endphp
 <div class="space-y-6">
     {{-- header --}}
     <div class="flex flex-wrap items-center justify-between gap-4">
