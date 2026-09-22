@@ -44,22 +44,27 @@ class PaymentService
                 ->purchase(
                     $invoice,
                     function ($driver, $transactionId) use ($purchase, $gateway) {
+                        // نکته: $driver در این نسخه آبجکتِ درایور است نه رشته → کلید درگاه را ذخیره می‌کنیم
                         $purchase->update([
                             'transaction_id' => $transactionId,
-                            'gateway'        => $driver,
+                            'gateway'        => $gateway,
                         ]);
 
                         Log::info('Purchase transaction created', [
                             'purchase_id'   => $purchase->id,
                             'transaction_id' => $transactionId,
-                            'gateway'       => $driver,
+                            'gateway'       => $gateway,
                         ]);
                     }
                 );
 
-            // 4️⃣ اجرای پرداخت و دریافت آدرس
-            $payment->pay();
-            $paymentUrl = $payment->getPaymentUrl();
+            // 4️⃣ اجرای پرداخت و دریافت فرم/آدرس
+            // نکته: در این نسخه شتابیت، pay() یک RedirectionForm برمی‌گرداند؛
+            // متد getPaymentUrl() وجود ندارد (باگ قبلی: Call to undefined method).
+            /** @var \Shetabit\Multipay\RedirectionForm $form */
+            $form = $payment->pay();
+
+            $paymentUrl = $this->resolvePaymentUrl($form, $purchase, $gateway);
 
             if (!$paymentUrl) {
                 throw new RuntimeException('دریافت آدرس پرداخت از درگاه ناموفق بود.');
@@ -86,6 +91,42 @@ class PaymentService
             ]);
             throw new RuntimeException('ایجاد تراکنش پرداخت ناموفق بود: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * تبدیل RedirectionForm شتابیت به payment_url قابل استفاده:
+     *
+     * ۱) درایورهای URL‌محور (GET بدون فیلد، مثل زرین‌پال):
+     *    آدرس اکشن فرم همان payment_url است → مرورگر مستقیم به درگاه می‌رود.
+     *
+     * ۲) درایورهای فرم‌محور (POST با فیلدها، مثل به‌پرداخت/سامان) و درگاه آزمایشی local:
+     *    HTML فرمِ خود-ارسال را در meta خرید ذخیره می‌کنیم و payment_url به مسیر
+     *    امضادار payment/form/{purchase} روی پنل اشاره می‌کند؛ مرورگر آنجا فرم را
+     *    رندر می‌کند و خودکار به درگاه POST می‌شود. (برای local صفحه شبیه‌ساز درگاه رندر می‌شود.)
+     */
+    private function resolvePaymentUrl(\Shetabit\Multipay\RedirectionForm $form, PackagePurchase $purchase, string $gateway): string
+    {
+        $action = trim((string) $form->getAction());
+        $method = strtoupper((string) $form->getMethod());
+        $inputs = $form->getInputs() ?: [];
+
+        // درایور URL‌محور: فرم GET بدون ورودی → اکشن = لینک پرداخت
+        $isUrlDriver = ($method === 'GET' || $method === '') && $action !== '' && empty($inputs);
+
+        if ($isUrlDriver) {
+            return $action;
+        }
+
+        // درایورهای فرم‌محور: HTML فرم خود-ارسال را ذخیره کن (local در کنترلر صفحه اختصاصی می‌گیرد)
+        if ($gateway !== 'local') {
+            $purchase->forceFill(['meta->payment_form' => $form->render()])->save();
+        }
+
+        return URL::temporarySignedRoute(
+            'payment.form',
+            now()->addMinutes(30),
+            ['purchase' => $purchase->id]
+        );
     }
 
     /**
@@ -124,67 +165,54 @@ class PaymentService
             $gatewayConfigs = get_gateway_configs($gateway);
 
             // 4️⃣ تایید پرداخت
+            // نکته مهم: در شتابیت، خودِِ برگرداندن Receipt یعنی پرداخت موفق بوده؛
+            // درگاه ناموفق InvalidPaymentException پرتاب می‌کند که در catch مدیریت می‌شود.
+            // (متد isPaid() در این نسخه وجود ندارد.)
             $receipt = Payment::via($gateway)
                 ->config($gatewayConfigs)
                 ->amount($purchase->amount)
                 ->transactionId($transactionId)
                 ->verify();
 
-            // 5️⃣ بررسی نتیجه پرداخت
-            if ($receipt->isPaid()) {
-                // پرداخت موفق
-                $purchase->markAsPaid($gateway);
+            // 5️⃣ رسید = پرداخت موفق
+            // پرداخت موفق
+            $purchase->markAsPaid($gateway);
 
-                Log::info('Payment verified successfully', [
-                    'purchase_id'    => $purchase->id,
+            Log::info('Payment verified successfully', [
+                'purchase_id'    => $purchase->id,
+                'transaction_id' => $transactionId,
+                'gateway'        => $gateway,
+            ]);
+
+            // 6️⃣ صدور لایسنس
+            try {
+                $license = $renew
+                    ? app(LicenseService::class)->issueOrRenew($purchase, $purchase->pricingPlan)
+                    : app(LicenseService::class)->issueLicense(
+                        $purchase,
+                        $purchase->pricingPlan
+                    );
+
+                return [
+                    'paid'          => true,
+                    'license_key'   => $license->license_key,
+                    'expires_at'    => $license->expires_at?->toDateTimeString(),
                     'transaction_id' => $transactionId,
-                    'gateway'        => $gateway,
-                ]);
+                    'gateway'       => $gateway,
+                    'message'       => 'پرداخت با موفقیت تأیید شد.',
+                    'purchase_id'   => $purchase->id,
+                ];
 
-                // 6️⃣ صدور لایسنس
-                try {
-                    $license = $renew
-                        ? app(LicenseService::class)->issueOrRenew($purchase, $purchase->pricingPlan)
-                        : app(LicenseService::class)->issueLicense(
-                            $purchase,
-                            $purchase->pricingPlan
-                        );
-
-                    return [
-                        'paid'          => true,
-                        'license_key'   => $license->license_key,
-                        'expires_at'    => $license->expires_at?->toDateTimeString(),
-                        'transaction_id' => $transactionId,
-                        'gateway'       => $gateway,
-                        'message'       => 'پرداخت با موفقیت تأیید شد.',
-                        'purchase_id'   => $purchase->id,
-                    ];
-
-                } catch (\Exception $e) {
-                    Log::error('License issuance failed after payment', [
-                        'purchase_id' => $purchase->id,
-                        'error'       => $e->getMessage(),
-                    ]);
-
-                    return [
-                        'paid'    => true,
-                        'message' => 'پرداخت تأیید شد اما صدور لایسنس با خطا مواجه شد. لطفاً با پشتیبانی تماس بگیرید.',
-                        'purchase_id' => $purchase->id,
-                    ];
-                }
-
-            } else {
-                // پرداخت ناموفق
-                $purchase->markAsFailed('پرداخت تأیید نشد');
-
-                Log::warning('Payment verification failed - not paid', [
-                    'purchase_id'    => $purchase->id,
-                    'transaction_id' => $transactionId,
+            } catch (\Exception $e) {
+                Log::error('License issuance failed after payment', [
+                    'purchase_id' => $purchase->id,
+                    'error'       => $e->getMessage(),
                 ]);
 
                 return [
-                    'paid'    => false,
-                    'message' => 'پرداخت تأیید نشد. لطفاً دوباره تلاش کنید.',
+                    'paid'    => true,
+                    'message' => 'پرداخت تأیید شد اما صدور لایسنس با خطا مواجه شد. لطفاً با پشتیبانی تماس بگیرید.',
+                    'purchase_id' => $purchase->id,
                 ];
             }
 

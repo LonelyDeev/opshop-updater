@@ -26,6 +26,7 @@ class ApiPaymentCallbackController extends Controller
     public function callback(Request $request)
     {
         $transactionId = $request->input('transaction_id')
+            ?? $request->input('transactionId') // درگاه آزمایشی local
             ?? $request->input('Authority')
             ?? $request->input('tracking_code')
             ?? $request->input('token');

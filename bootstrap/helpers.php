@@ -4,9 +4,23 @@ function get_gateway_configs($gateway)
 {
     $gateway = \App\Models\Gateway::where('key', $gateway)->first();
 
+    if (!$gateway) {
+        return [];
+    }
+
     $configs = [];
 
     switch ($gateway->key) {
+        case "local": {
+            // درگاه آزمایشی — فقط برای تست جریان پرداخت (در شبیه‌ساز درگاه رندر می‌شود)
+            $configs['title']        = $gateway->config('title') ?? 'درگاه پرداخت آزمایشی';
+            $configs['description']  = $gateway->config('description') ?? 'این درگاه فقط برای تست جریان پرداخت است — پول واقعی کم نمی‌شود';
+            $configs['orderLabel']   = $gateway->config('orderLabel') ?? 'شماره سفارش';
+            $configs['amountLabel']  = $gateway->config('amountLabel') ?? 'مبلغ';
+            $configs['payButton']    = $gateway->config('payButton') ?? 'پرداخت (موفق)';
+            $configs['cancelButton'] = $gateway->config('cancelButton') ?? 'لغو پرداخت';
+            break;
+        }
         case "zarinpal": {
             $configs['merchantId'] = $gateway->config('merchantId');
             break;

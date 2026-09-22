@@ -17,6 +17,12 @@ Route::get('payment/callback', [\App\Http\Controllers\Front\WebPaymentController
 Route::post('payment/callback', [\App\Http\Controllers\Front\WebPaymentController::class, 'callback'])->name('payment.callback.post');
 Route::get('payment/result/{purchase}', \App\Livewire\Shop\PaymentResult::class)->name('payment.result');
 
+// فرم پرداخت درایورهای فرم‌محور + شبیه‌ساز درگاه آزمایشی (local)
+// payment_url خریدهای API برای این درایورها به این مسیر امضادار اشاره می‌کند.
+Route::get('payment/form/{purchase}', [\App\Http\Controllers\Front\PaymentFormController::class, 'show'])
+    ->name('payment.form')
+    ->middleware('signed');
+
 // مسیر عمومی دانلود آپدیت (بدون احراز هویت)
 Route::get('get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');
 

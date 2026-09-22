@@ -128,18 +128,41 @@ class ApiPackageController extends Controller
     /* ===================================================================
      *  POST /api/v1/packages/{slug}/purchase
      *  ایجاد درخواست خرید و دریافت payment_url
-     *  Body: { callback_url, pricing_plan_id }
-     *  Response: { payment_url, transaction_id, amount, gateway }
+     *  Body: { callback_url, pricing_plan_id, gateway? }
+     *  Response: { payment_url, transaction_id, amount, gateway, purchase_id }
+     *  - پکیج/طرح رایگان: { is_free, license_key, expires_at, download_token }
+     *  - gateway اختیاری است (پیش‌فرض zarinpal)؛ کلاینت می‌تواند درگاه فعال دیگری
+     *    را انتخاب کند (مثلاً «local» برای تست جریان پرداخت).
+     *  - payment_url برای درایورهای URL مستقیم است؛ برای درایورهای فرم‌محور
+     *    یک مسیر امضادار روی پنل است که فرم را رندر و خودکار به درگاه POST می‌کند.
      * =================================================================== */
     public function purchase(Request $request, string $slug): JsonResponse
     {
         $request->validate([
             'callback_url'    => 'required|url',
             'pricing_plan_id' => 'required|exists:package_pricing_plans,id',
+            'gateway'         => 'nullable|string|max:32',
         ]);
 
         try {
             $customer = $this->authService->authenticate($request);
+
+            // درگاه اختیاری: کلاینت می‌تواند درگاه مشخصی بخواهد (مثلاً local برای تست)
+            // باید در فهرست درگاه‌های پشتیبانی‌شده + فعال باشد.
+            $gatewayKey = $request->input('gateway');
+            if ($gatewayKey) {
+                $gatewayActive = \App\Models\Gateway::query()
+                    ->where('key', $gatewayKey)
+                    ->whereIn('key', array_keys(config('general.supported_gateways')))
+                    ->where('is_active', true)
+                    ->exists();
+
+                if (!$gatewayActive) {
+                    return response()->json([
+                        'error' => "درگاه «{$gatewayKey}» وجود ندارد یا فعال نیست. درگاه‌های فعال را از فهرست پکیج‌ها یا پنل بررسی کنید.",
+                    ], 422);
+                }
+            }
 
             $package = Package::where('slug', $slug)
                 ->where('status', Package::STATUS_ACTIVE)
@@ -201,8 +224,14 @@ class ApiPackageController extends Controller
                 'status'          => PackagePurchase::STATUS_PENDING,
             ]);
 
-            // ایجاد پرداخت در درگاه
-            $payment = $this->paymentService->createPayment($purchase);
+            // ایجاد پرداخت در درگاه (gateway اختیاری کلاینت یا پیش‌فرض)
+            // اگر درگاه تراکنش نسازد، رکورد pending یتیم باقی نماند.
+            try {
+                $payment = $this->paymentService->createPayment($purchase, $gatewayKey);
+            } catch (\Throwable $e) {
+                $purchase->delete();
+                throw $e;
+            }
 
             return response()->json([
                 'payment_url'    => $payment['payment_url'],
@@ -240,7 +269,7 @@ class ApiPackageController extends Controller
             // اگر قبلاً پرداخت و لایسنس صادر شده
             if ($purchase->isPaid() && $purchase->license) {
                 $license = $purchase->license;
-                $latestVersion = $purchase->package->latestVersion();
+                $latestVersion = $purchase->package->latestVersion()->first();
 
                 return response()->json([
                     'paid'         => true,
@@ -262,7 +291,7 @@ class ApiPackageController extends Controller
                 if ($result['paid'] ?? false) {
                     $purchase->refresh();
                     $license = $purchase->license;
-                    $latestVersion = $purchase->package->latestVersion();
+                    $latestVersion = $purchase->package->latestVersion()->first();
 
                     return response()->json([
                         'paid'         => true,

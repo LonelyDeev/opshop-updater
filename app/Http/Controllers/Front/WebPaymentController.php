@@ -23,7 +23,9 @@ class WebPaymentController extends Controller
     public function callback(Request $request): RedirectResponse
     {
         // شناسه تراکنش با کلیدهای متداول درگاه‌ها (همان جریان API)
+        // transactionId (camelCase) → درگاه آزمایشی local
         $transactionId = $request->input('transaction_id')
+            ?? $request->input('transactionId')
             ?? $request->input('Authority')
             ?? $request->input('tracking_code')
             ?? $request->input('token');

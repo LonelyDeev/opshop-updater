@@ -99,11 +99,17 @@ GET  /api/v1/packages/download/{dlToken}               → فایل ZIP؛ ⭐ ح
 ### ⭐ قرارداد یکپارچه‌سازی «پروژه فروشگاه» (store project مشتری)
 پروژه فروشگاه مشتری باید برای هر مشتری (با update_code + website_url ثبت‌شده در پنل):
 1. **لیست پکیج‌ها**: `GET /api/v1/packages` با هدرهای `Authorization: Bearer {update_code}` + `X-Project-Url: https://{مشتری-دامنه}`.
-2. **نمایش دکمه**: برای هر آیتم اگر `is_purchased == true` → دکمه «دانلود» (نه «خرید»); `purchased_license.days_remaining` هم برای هشدار انقضای نزدیک.
+2. **نمایش دکمه**: برای هر آیتم اگر `is_purchased == true` → دکمه «دانلود» (نه «خرید»); `purchased_license.days_remaining` هم برای هشدار انقضای نزدیک. (طرح‌ها در `active_pricing_plans[]` با فیلدهای `price`/`discount_price` — `final_price` در JSON نیست.)
 3. **دانلود**: دو راه —
    - ساده: `POST /api/v1/packages/{slug}/download-url` → بگذار `download_url` را مستقیم در `href` دکمه (مرورگر مشتری بدون هدر دانلود می‌کند؛ ۱۵ دقیقه/یک‌بار).
    - یا: `GET /api/v1/packages/{slug}/download` با هدرها از بک‌اند خودتان proxy کنید (برای شمارش/IP یا هر منطق دیگر).
-4. **خرید/تمدید**: `POST /packages/{slug}/purchase` مثل قبل (پرداخت درگاه) یا اگر لایسنس منقضی شده → همان خرید = تمدید.
+4. **خرید/تمدید**: `POST /packages/{slug}/purchase` با Body: `{callback_url, pricing_plan_id, gateway?}`:
+   - `gateway` اختیاری — درگاه فعال پنل (پیش‌فرض zarinpal)؛ برای تست کل جریان بدون پول واقعی: `local`.
+   - پاسخ: `{payment_url, transaction_id, amount, gateway, purchase_id}` — **payment_url را فقط ریدایرکت کنید**: برای درایورهای URL (زرین‌پال) مستقیمِ بانک است؛ برای درایورهای فرم‌محور (به‌پرداخت و…) مسیر امضادار `payment/form/{id}` روی پنل است که فرم خود-ارسال را رندر می‌کند (نیازی به منطق اضافه سمت کلاینت نیست).
+   - رایگان (is_free یا final_price≤0): `{is_free: true, license_key, expires_at, download_token}` — بدون درگاه.
+   - در بازگشت درگاه (GET/POST به callback_url شما با `transactionId`/`transaction_id`/`Authority`): سمت سرور `POST /api/v1/payments/{trx}/verify` را با هدرهای احراز صدا بزنید → `{paid, license_key, expires_at, days_remaining, download_token, signature, version}` → ذخیره در `installed_modules` (slug + license_key + license_expires_at + last_verified_at — همان چیزی که LicenseGuard مشتری می‌خواند). اگر لایسنس منقضی شده → همان خرید = تمدید.
+   - ⚠️ برای درایور آزمایشی `local`: در فراخوانی verify پارامتر `?transactionId={trx}` را هم در query بفرستید (درایور local آن را از request می‌خواند؛ برای درگاه‌های واقعی بی‌اثر).
+5. **کیت آماده**: پوشه `download/shop-payment-kit/` (۵ part + README-FA) برای پروژه فروشگاه مشتری + مرجع زنده `mini-services/shop-sim` (port 3001).
 همه پاسخ‌های خطا فارسی‌اند: 403 «شما این پکیج را نخریده‌اید یا لایسنس شما فعال نیست.» وقتی لایسنس فعال نیست.
 
 ---
@@ -172,6 +178,15 @@ checkout در `Shop\PackageShow::buy()`: کد آپدیت → Customer → گار
 13. **`$errors` همیشه باید share شود**: `AppServiceProvider::boot()` یک `View::share('errors', new ViewErrorBag)` پایه ست می‌کند. دلیل: Livewire در هر رندر `shareWithViews('errors', …)` می‌زند و اگر قبلاً چیزی share نشده باشد ('notfound')، پس از رندر آن را **unset** می‌کند → در رندرهای بعدی همان request «Undefined variable $errors» می‌شود (روی هاست‌هایی که middleware وب کامل اجرا نمی‌شود دیده شد). علاوه بر این، فایل‌های کلیدی (field/ckeditor/settings/packages-show) با الگوی `$errors ?? null` + `?->has` هم مقاوم شده‌اند.
 14. **x-field کلید خطا**: کلیدهای اعتبارسنجی Livewire با پیشوند کامل ذخیره می‌شوند (`form.site_name`) ولی x-field فقط `for` ساده را می‌شناخت → حالا کاندیدها: `$error` صریح، `$for`، و `form.$for`.
 15. **استقرار روی هاست اشتراکی (cPanel)**: اگر استایل‌ها نصفه/بدون padding لود شدند، CSS ساخته‌شده را چک کنید: docroot دامنه باید **روی پوشه `public`** باشد (نه ریشه پروژه) وگرنه `/build/assets/*` که URL مطلق است 404 می‌شود؛ بعد از تغییر فایل‌های ساخت، `php artisan view:clear` + هارد‌ریفرش (Ctrl+Shift+R) مرورگر.
+16. **shetabit Multipay این نسخه (v6.4):**
+    - `pay()` یک `RedirectionForm` برمی‌گرداند؛ متد `getPaymentUrl()` **وجود ندارد** → قبلاً createPayment با هر درگاه واقعی کرش می‌کرد. حالا: درایورهای GET بدون-ورودی (زرین‌پال) → payment_url = اکشن فرم؛ درایورهای POST → HTML فرم در `meta->payment_form` ذخیره + ریدایرکت به مسیر امضادار `payment.form` (روت وب + middleware signed، ۳۰ دقیقه)؛ درایور `local` → صفحه شبیه‌ساز `payment.fake-gateway` (داده‌ها از رکورد خرید ساخته می‌شوند، نیازی به فرم نیست).
+    - کال‌بک `purchase($invoice, fn($driver, $trx))` — `$driver` **آبجکت درایور است نه رشته** → همیشه کلید gateway را ذخیره کنید.
+    - `verify()` برگرداندن Receipt = موفق؛ ناموفق = `InvalidPaymentException` → متد `isPaid()` وجود ندارد (حذف شد؛ منطق بر اساس رسید/Exception).
+    - درایور `local`: ① باید در `config/payment.php` بخش `drivers` (نه فقط `map`) ثبت شود وگرنه `Driver not found`؛ ② `verify()` درایور `Request::input('transactionId')` را از **درخواست جاری** می‌خواند → فراخوانِ verify باید `?transactionId=` در query بفرستد؛ ③ بازگشت درگاه با پارامتر camelCase `transactionId` است → کال‌بک‌های پنل (web+api) این کلید را هم می‌خوانند.
+    - درایور local تنظیمات فرم (title/description/payButton/...) را از `get_gateway_configs` می‌گیرد (case «local» در helper با fallback‌ها)؛ ردیف gateway با key=local هم seed شده (پیش‌فرض غیرفعال).
+17. **`latestVersion()` رابطه است** — `$package->latestVersion()` خودِ HasOne را برمی‌گرداند (truthy!)؛ همیشه `->first()` صدا بزنید. باگ API verifyPayment همین بود (TypeError در createDownloadToken).
+18. **رکورد pending یتیم**: اگر `createPayment` بعد از `PackagePurchase::create` شکست بخورد، رکورد pending می‌ماند → در purchase API حالا `$purchase->delete()` در catch.
+
 
 ---
 
