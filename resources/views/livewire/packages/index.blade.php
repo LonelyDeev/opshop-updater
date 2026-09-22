@@ -174,9 +174,7 @@
                 <x-input wire:model="form.short_description" placeholder="یک جمله درباره کاربرد پکیج…" :class="$errors->has('form.short_description') ? 'input-error' : ''" />
             </x-field>
 
-            <x-field label="توضیحات کامل">
-                <x-textarea wire:model="form.description" rows="4" placeholder="توضیح کامل پکیج، قابلیت‌ها و نصب…" :class="$errors->has('form.description') ? 'input-error' : ''" />
-            </x-field>
+            <x-ckeditor model="form.description" label="توضیحات کامل" :value="$form['description'] ?? ''" error="form.description" />
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <x-field label="نویسنده">

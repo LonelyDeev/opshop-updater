@@ -12,7 +12,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // درگاه‌های پرداخت بانکی با POST خارج از Laravel (بدون توکن CSRF) به کال‌بک برمی‌گردند
+        $middleware->validateCsrfTokens(except: ['payment/callback']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

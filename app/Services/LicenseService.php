@@ -46,6 +46,31 @@ class LicenseService
     }
 
     /**
+     * صدور یا تمدید لایسنس بر اساس وضعیت فعلی مشتری:
+     * اگر مشتری برای همین پکیج لایسنس فعال/منقضی (غیر باطل‌شده) داشته باشد
+     * ابتدا تمدید انجام می‌شود؛ در صورت خطا (طرح‌های یک‌بار مصرف) یا نبود لایسنس قبلی، لایسنس جدید صادر می‌شود.
+     */
+    public function issueOrRenew(PackagePurchase $purchase, PackagePricingPlan $plan): PackageLicense
+    {
+        $oldLicense = PackageLicense::query()
+            ->where('package_id', $purchase->package_id)
+            ->where('customer_id', $purchase->customer_id)
+            ->whereIn('status', [PackageLicense::STATUS_ACTIVE, PackageLicense::STATUS_EXPIRED])
+            ->latest('id')
+            ->first();
+
+        if ($oldLicense) {
+            try {
+                return $this->renewLicense($oldLicense, $purchase, $plan);
+            } catch (\RuntimeException $e) {
+                // طرح یک‌بار مصرف قابل تمدید نیست → لایسنس جدید صادر می‌کنیم
+            }
+        }
+
+        return $this->issueLicense($purchase, $plan);
+    }
+
+    /**
      * تمدید لایسنس (برای لایسنس‌های منقضی یا در حال انقضا)
      * لایسنس جدید ساخته می‌شود و renewed_from به لایسنس قبلی اشاره می‌کند
      */

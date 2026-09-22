@@ -127,9 +127,7 @@
                 <x-input wire:model="form.repository_url" placeholder="https://github.com/user/repo" icon="git-branch" dir="ltr" :class="$errors->has('form.repository_url') ? 'input-error' : ''" />
             </x-field>
 
-            <x-field label="توضیحات">
-                <x-textarea wire:model="form.description" rows="3" placeholder="توضیح کوتاه درباره پروژه…" :class="$errors->has('form.description') ? 'input-error' : ''" />
-            </x-field>
+            <x-ckeditor model="form.description" label="توضیحات" :value="$form['description'] ?? ''" error="form.description" />
 
             <div class="flex items-center justify-end gap-2 pt-2">
                 <x-btn variant="secondary" wire:click="$set('showModal', false)">انصراف</x-btn>

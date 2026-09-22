@@ -13,7 +13,7 @@ use Shetabit\Payment\Facade\Payment;
 class PaymentService
 {
 
-    public function createPayment(PackagePurchase $purchase): array
+    public function createPayment(PackagePurchase $purchase, ?string $gateway = null): array
     {
         if ($purchase->amount <= 0) {
             throw new RuntimeException('مبلغ تراکنش باید بزرگ‌تر از صفر باشد.');
@@ -25,7 +25,7 @@ class PaymentService
         }
         try {
             // 1️⃣ تنظیمات درگاه
-            $gateway = 'zarinpal';
+            $gateway = $gateway ?? 'zarinpal';
             $gatewayConfigs = get_gateway_configs($gateway);
 
             // 2️⃣ ایجاد Invoice
@@ -93,7 +93,7 @@ class PaymentService
      *
      * @return array{paid: bool, license_key: ?string, expires_at: ?string, message: ?string}
      */
-    public function verifyPayment(string $transactionId): array
+    public function verifyPayment(string $transactionId, bool $renew = false): array
     {
         // 1️⃣ پیدا کردن خرید بر اساس transaction_id
         $purchase = PackagePurchase::where('transaction_id', $transactionId)->first();
@@ -143,10 +143,12 @@ class PaymentService
 
                 // 6️⃣ صدور لایسنس
                 try {
-                    $license = app(LicenseService::class)->issueLicense(
-                        $purchase,
-                        $purchase->pricingPlan
-                    );
+                    $license = $renew
+                        ? app(LicenseService::class)->issueOrRenew($purchase, $purchase->pricingPlan)
+                        : app(LicenseService::class)->issueLicense(
+                            $purchase,
+                            $purchase->pricingPlan
+                        );
 
                     return [
                         'paid'          => true,

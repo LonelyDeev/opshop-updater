@@ -29,11 +29,30 @@
     ];
 
     $classes = trim("{$base} {$variants[$variant]} {$sizes[$size]}");
+
+    /* target for wire:loading — the button's own wire:click / wire:submit action
+       (submit buttons inside a form get no target → reacts to the form's request) */
+    $loadingTarget = $attributes->whereStartsWith(['wire:click', 'wire:submit'])->first();
+    $targetAttr = $loadingTarget ? 'wire:target="' . $loadingTarget . '"' : '';
+    $spinnerSize = $size === 'sm' ? 'size-3.5' : 'size-4';
 @endphp
 
-<button {{ $attributes->merge(['type' => 'button', 'class' => $classes]) }} @if($loading) wire:loading.attr="disabled" wire:target="{{ $attributes->whereStartsWith('wire:click')->first() }}" @endif>
+<button {{ $attributes->merge(['type' => 'button', 'class' => $classes]) }} @if($loading) wire:loading.attr="disabled" {{ $targetAttr }} @endif>
     @if($loading)
-        <x-icon name="loader" class="size-4 animate-spin" />
+        {{-- spinner: hidden by default, appears only while the request is in-flight --}}
+        @if($loadingTarget)
+            <x-icon name="loader" class="{{ $spinnerSize }} animate-spin" wire:loading wire:target="{{ $loadingTarget }}" />
+        @else
+            <x-icon name="loader" class="{{ $spinnerSize }} animate-spin" wire:loading />
+        @endif
+        @if($icon)
+            {{-- normal icon: visible by default, hidden while loading --}}
+            @if($loadingTarget)
+                <x-icon :name="$icon" class="{{ $size === 'sm' ? 'size-3.5' : 'size-4.5' }}" wire:loading.remove wire:target="{{ $loadingTarget }}" />
+            @else
+                <x-icon :name="$icon" class="{{ $size === 'sm' ? 'size-3.5' : 'size-4.5' }}" wire:loading.remove />
+            @endif
+        @endif
     @elseif($icon)
         <x-icon :name="$icon" class="{{ $size === 'sm' ? 'size-3.5' : 'size-4.5' }}" />
     @endif

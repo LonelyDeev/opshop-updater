@@ -1,6 +1,6 @@
 {
   "resources/css/app.css": {
-    "file": "assets/app-m4M8e68w.css",
+    "file": "assets/app-BAh2lxzI.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -25,7 +25,7 @@
     "src": "resources/fonts/Vazirmatn[wght].woff2"
   },
   "resources/js/app.js": {
-    "file": "assets/app-CREfyKCk.js",
+    "file": "assets/app-BIwZvxIj.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true

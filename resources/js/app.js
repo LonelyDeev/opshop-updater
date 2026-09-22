@@ -1,4 +1,6 @@
 import './livewire-config';
+import './ckeditor';
+import './loading';
 import { Livewire, Alpine } from '../../vendor/livewire/livewire/dist/livewire.esm';
 
 /* ------------------------------------------------------------------ */
@@ -56,7 +58,7 @@ window.addEventListener('livewire:navigating', () => {
     if (!bar) {
         bar = document.createElement('div');
         bar.className = 'livewire-progress';
-        document.body.appendChild(bar);
+        document.head.appendChild(bar); // head persists through wire:navigate body morphs
     }
     bar.style.width = '30%';
     bar.style.opacity = '1';

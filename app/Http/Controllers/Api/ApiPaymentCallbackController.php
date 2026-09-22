@@ -31,14 +31,14 @@ class ApiPaymentCallbackController extends Controller
             ?? $request->input('token');
 
         if (!$transactionId) {
-            return redirect()->route('admin.packages.purchases.index')
+            return redirect()->route('shop.home')
                 ->with('error', 'اطلاعات تراکنش ناقص است.');
         }
 
         $purchase = PackagePurchase::where('transaction_id', $transactionId)->first();
 
         if (!$purchase) {
-            return redirect()->route('admin.packages.purchases.index')
+            return redirect()->route('shop.home')
                 ->with('error', 'رکورد خرید یافت نشد.');
         }
 
@@ -59,7 +59,7 @@ class ApiPaymentCallbackController extends Controller
                 return redirect($finalUrl);
             }
 
-            return redirect()->route('admin.packages.purchases.show', $purchase)
+            return redirect()->route('payment.result', $purchase)
                 ->with('success', 'پرداخت با موفقیت تأیید شد.');
         }
 
@@ -75,7 +75,7 @@ class ApiPaymentCallbackController extends Controller
             return redirect($finalUrl);
         }
 
-        return redirect()->route('admin.packages.purchases.show', $purchase)
+        return redirect()->route('payment.result', $purchase)
             ->with('error', $result['message'] ?? 'پرداخت ناموفق بود.');
     }
 }

@@ -61,7 +61,7 @@ class PackagePurchase extends Model
         return $this->status === self::STATUS_PAID;
     }
 
-    public function markAsPaid(string $gateway = null): void
+    public function markAsPaid(?string $gateway = null): void
     {
         $this->update([
             'status'  => self::STATUS_PAID,
@@ -70,7 +70,7 @@ class PackagePurchase extends Model
         ]);
     }
 
-    public function markAsFailed(string $reason = null): void
+    public function markAsFailed(?string $reason = null): void
     {
         $this->update([
             'status' => self::STATUS_FAILED,

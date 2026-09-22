@@ -4,7 +4,18 @@ use App\Http\Controllers\Front\UpdateDownloadController;
 use App\Livewire\Dashboard;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => redirect('/admin'));
+/*
+|--------------------------------------------------------------------------
+| فروشگاه عمومی (Storefront)
+|--------------------------------------------------------------------------
+*/
+Route::get('/', \App\Livewire\Shop\Home::class)->name('shop.home');
+Route::get('packages/{slug}', \App\Livewire\Shop\PackageShow::class)->name('shop.package');
+
+// پرداخت (عمومی)
+Route::get('payment/callback', [\App\Http\Controllers\Front\WebPaymentController::class, 'callback'])->name('payment.callback');
+Route::post('payment/callback', [\App\Http\Controllers\Front\WebPaymentController::class, 'callback'])->name('payment.callback.post');
+Route::get('payment/result/{purchase}', \App\Livewire\Shop\PaymentResult::class)->name('payment.result');
 
 // مسیر عمومی دانلود آپدیت (بدون احراز هویت)
 Route::get('get-update/{code}', [UpdateDownloadController::class, 'download'])->name('public.download');

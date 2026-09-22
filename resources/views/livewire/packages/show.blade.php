@@ -134,7 +134,10 @@
                                 توضیحات
                             </h3>
                             <div class="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200 dark:bg-zinc-800/40 dark:ring-zinc-700">
-                                <p class="text-sm leading-7 text-zinc-700 dark:text-zinc-300" style="white-space: pre-line">{{ $package->description ?: 'توضیحاتی ثبت نشده است.' }}</p>
+                                {{-- Raw HTML rendering (CKEditor). Legacy plain-text descriptions are
+                                     escaped + nl2br'd so old content still reads correctly. --}}
+                                @php($descriptionHtml = preg_match('/<[a-z][^>]*>/i', (string) $package->description) ? (string) $package->description : ($package->description ? '<p>' . nl2br(e($package->description)) . '</p>' : ''))
+                                <div class="rich-content">{!! $descriptionHtml ?: '<p>توضیحاتی ثبت نشده است.</p>' !!}</div>
                             </div>
                         </div>
 
@@ -516,9 +519,7 @@
                 <x-input wire:model="form.short_description" :class="$errors->has('form.short_description') ? 'input-error' : ''" />
             </x-field>
 
-            <x-field label="توضیحات کامل">
-                <x-textarea wire:model="form.description" rows="4" :class="$errors->has('form.description') ? 'input-error' : ''" />
-            </x-field>
+            <x-ckeditor model="form.description" label="توضیحات کامل" :value="$form['description'] ?? ''" error="form.description" />
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <x-field label="نویسنده">
@@ -546,7 +547,20 @@
                 @endif
 
                 <x-field label="فایل تصویر جدید">
-                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" wire:model="thumbnailFile" class="input" />
+                    {{-- wire:ignore keeps the generated preview nodes alive across Livewire morphs --}}
+                    <div wire:key="ck-thumb-preview" wire:ignore x-data="filePreview()" class="space-y-2">
+                        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" wire:model="thumbnailFile" x-ref="input" class="input" />
+                        <template x-for="(preview, i) in previews" :key="i">
+                            <div class="flex items-center gap-3">
+                                <img :src="preview.url" :alt="preview.name"
+                                     class="size-20 shrink-0 rounded-xl bg-zinc-100 object-cover ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700" />
+                                <div class="min-w-0">
+                                    <p class="truncate text-xs font-medium text-zinc-700 dark:text-zinc-200" x-text="preview.name"></p>
+                                    <p class="mt-0.5 text-[11px] text-zinc-400">پیش‌نمایش تصویر انتخاب‌شده — با ذخیره جایگزین می‌شود</p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
                     <div wire:loading wire:target="thumbnailFile" class="mt-2 flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
                         <x-icon name="loader" class="size-4 animate-spin" />
                         در حال آپلود…
@@ -564,8 +578,19 @@
                     <x-icon name="upload" class="size-4 text-brand-600" />
                     افزودن تصاویر گالری
                 </p>
-                <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" wire:model="newGallery" class="input" />
-                <p class="text-xs text-zinc-500 dark:text-zinc-400">حداکثر ۱۰ تصویر؛ به گالری فعلی اضافه می‌شود.</p>
+                {{-- wire:ignore keeps the generated preview grid alive across Livewire morphs --}}
+                <div wire:key="ck-gallery-preview" wire:ignore x-data="filePreview({ multiple: true })" class="space-y-2">
+                    <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" wire:model="newGallery" x-ref="input" class="input" />
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400">حداکثر ۱۰ تصویر؛ به گالری فعلی اضافه می‌شود.</p>
+                    <template x-if="previews.length">
+                        <div class="grid grid-cols-6 gap-2">
+                            <template x-for="(preview, i) in previews" :key="i">
+                                <img :src="preview.url" :alt="preview.name" :title="preview.name"
+                                     class="h-16 w-full rounded-lg bg-zinc-100 object-cover ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700" />
+                            </template>
+                        </div>
+                    </template>
+                </div>
                 <div wire:loading wire:target="newGallery" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
                     <x-icon name="loader" class="size-4 animate-spin" />
                     در حال آپلود…
