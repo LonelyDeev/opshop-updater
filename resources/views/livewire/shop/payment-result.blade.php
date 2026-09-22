@@ -13,7 +13,7 @@
                 </span>
                 <h1 class="text-2xl font-black text-white sm:text-3xl">پرداخت با موفقیت انجام شد</h1>
                 <p class="text-sm leading-7 text-emerald-50/80">
-                    از خرید شما متشکریم{{ $purchase->customer?->name ? '، ' . $purchase->customer->name : '' }}! لایسنس و لینک دانلود شما آماده است.
+                    از خرید شما متشکریم{{ $purchase->customer?->name ? '، ' . $purchase->customer->name : '' }}! لایسنس شما صادر شد و پکیج در پروژه شما فعال است.
                 </p>
                 @if($purchase->transaction_id)
                     <div class="mt-2 flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 ring-1 ring-white/20" dir="ltr">
@@ -228,10 +228,17 @@
                     </div>
 
                     @if($purchase->isPaid())
-                        <x-btn wire:click="download" :loading="true" icon="download" class="w-full">
-                            دانلود پکیج
-                        </x-btn>
-                        <p class="text-center text-xs leading-4 text-zinc-400">لینک دانلود ۱۵ دقیقه اعتبار دارد.</p>
+                        @php($renewed = (bool) $purchase->license?->renewedFrom)
+                        <div class="flex items-start gap-3 rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-600/15 dark:bg-emerald-500/10 dark:ring-emerald-400/20">
+                            <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400">
+                                <x-icon name="refresh-cw" class="size-4" />
+                            </span>
+                            <p class="text-xs leading-6 font-medium text-emerald-800 dark:text-emerald-200">
+                                پکیج «{{ $purchase->package->name }}» {{ $renewed ? 'در پروژه شما تمدید شد' : 'برای پروژه شما فعال شد' }} و می‌توانید از
+                                <span class="font-black">صفحه پکیج‌ها</span>
+                                آن را دانلود کنید.
+                            </p>
+                        </div>
                     @endif
 
                     <a href="{{ route('shop.package', $purchase->package->slug) }}" wire:navigate
@@ -249,7 +256,7 @@
                 </p>
                 <p>
                     کلید لایسنس و «کد آپدیت» خود را نگه دارید؛ برای دریافت نسخه‌های بعدی همین پکیج
-                    می‌توانید با همان کد آپدیت، مجدداً از فروشگاه خرید یا دانلود کنید.
+                    می‌توانید با همان کد آپدیت، مجدداً از پروژه خود خرید/تمدید کنید و از صفحه پکیج‌ها دانلود کنید.
                 </p>
             </div>
         </aside>

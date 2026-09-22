@@ -34,7 +34,14 @@ Route::prefix('v1')->name('api.')->group(function () {
 
 
         // --- دانلود ---
+        // لینک مستقیم یک‌بارمصرف (خروجی download-url) — با یا بدون هدرهای احراز کار می‌کند
         Route::get('/packages/download/{dlToken}', [ApiPackageDownloadController::class, 'download'])->name('download');
+
+        // دانلود مستقیم پکیجِ خریداری‌شده (لایسنس فعال لازم است) — برای proxy از سمت پروژه خریدار
+        Route::get('/packages/{slug}/download', [ApiPackageDownloadController::class, 'downloadBySlug'])->name('download.direct');
+
+        // ساخت لینک دانلود یک‌بارمصرف ۱۵دقیقه‌ای برای پکیج خریداری‌شده — قابل قراردادن در href
+        Route::post('/packages/{slug}/download-url', [ApiPackageDownloadController::class, 'issueDownloadUrl'])->name('download.url');
 
     });
 

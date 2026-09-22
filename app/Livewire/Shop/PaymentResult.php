@@ -3,7 +3,6 @@
 namespace App\Livewire\Shop;
 
 use App\Livewire\Concerns\WithToasts;
-use App\Models\PackageDownloadToken;
 use App\Models\PackagePurchase;
 use App\Services\PaymentService;
 use Livewire\Attributes\Layout;
@@ -57,31 +56,6 @@ class PaymentResult extends Component
         } else {
             $this->toast($result['message'] ?? 'پرداخت هنوز تأیید نشده است.', 'error');
         }
-    }
-
-    /**
-     * ساخت توکن موقت دانلود (۱۵ دقیقه) و هدایت به مسیر دانلود عمومی.
-     */
-    public function download(): void
-    {
-        $license = $this->purchase->license;
-        $version = $this->purchase->package->latestVersion()->first();
-
-        if (!$license || !$version) {
-            $this->toast('نسخه فعالی برای این پکیج وجود ندارد.', 'error');
-            return;
-        }
-
-        $token = PackageDownloadToken::create([
-            'token'       => PackageDownloadToken::generate(),
-            'license_id'  => $license->id,
-            'version_id'  => $version->id,
-            'customer_id' => $this->purchase->customer_id,
-            'expires_at'  => now()->addMinutes(15),
-        ]);
-
-        $this->toast('لینک دانلود ساخته شد؛ ۱۵ دقیقه اعتبار دارد.');
-        $this->redirect(route('api.packages.download', $token->token), navigate: false);
     }
 
     public function render()

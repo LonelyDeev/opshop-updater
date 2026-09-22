@@ -75,21 +75,36 @@ GET  /get-update/{code}             → UpdateDownloadController (دانلود �
 GET  /admin/...                     → ۱۳ صفحه Livewire پنل (auth middleware)
 ```
 
-### API v1 (`routes/api/v1.php`) — دست‌نخورده
+### API v1 (`routes/api/v1.php`)
 ```
 GET  /api/v1/check-update?...                          → UpdateController@check
 GET  /api/v1/download-update/{id}                      → UpdateController@download
 GET  /api/v1/packages                                  → ApiPackageController@index    (پکیج‌های پروژه‌های مشتری)
-GET  /api/v1/packages/{slug}                           → show (+ installed_license)
+                                                        ⭐ هر آیتم: is_purchased + purchased_license {license_key, expires_at, days_remaining, is_unlimited} (+ installed_license قدیمی)
+GET  /api/v1/packages/{slug}                           → show (+ is_purchased + purchased_license + installed_license)
 POST /api/v1/packages/{slug}/purchase                  → purchase  body: {callback_url, pricing_plan_id} → {payment_url, transaction_id, amount, gateway}
      (اگر رایگان: مستقیم {is_free, license_key, expires_at, download_token})
 POST /api/v1/payments/{transactionId}/verify           → verifyPayment → {paid, license_key, expires_at, days_remaining, download_token, signature, version}
 GET|POST /api/v1/payments/callback                     → ApiPaymentCallbackController (بازگشت مرورگر؛ بدون callback_url → ریدایرکت به payment.result)
 POST /api/v1/packages/{slug}/verify-license            → {valid, expires_at, days_remaining, version, signature, download_token}
 GET  /api/v1/packages/{slug}/check-update?current_version= → {has_update, latest_version, changelog, ...}
-GET  /api/v1/packages/download/{dlToken}               → فایل ZIP نسخه
+
+--- دانلود پکیج خریداری‌شده (جدید ۱۴۰۵/۰۶/۳۱) ---
+GET  /api/v1/packages/{slug}/download[?version=x.y.z]  → ⭐ دانلود مستقیم ZIP آخرین نسخه (یا نسخه خاص) با هدرهای احراز — برای proxy از سمت پروژه خریدار
+POST /api/v1/packages/{slug}/download-url              → ⭐ ساخت لینک یک‌بارمصرف ۱۵دقیقه‌ای → {download_url, expires_in_seconds, version, file_size, file_hash} — لینک بدون هدر هم کار می‌کند (قابل قرار دادن در href)
+GET  /api/v1/packages/download/{dlToken}               → فایل ZIP؛ ⭐ حالا بدون هدرهای احراز هم کار می‌کند (توکن خودش گواهی است) — سازگار با قبل (با هدر هم صحیح)
 ```
 **احراز هویت API** (`PackageApiAuthService`): توکن از `Authorization: Bearer` یا `X-Project-Key` یا `?token=` → Customer با `update_code` + الزام هدر `X-Project-Url` (هوست باید با `customer.website_url` یا زیردامنه‌اش بخواند).
+
+### ⭐ قرارداد یکپارچه‌سازی «پروژه فروشگاه» (store project مشتری)
+پروژه فروشگاه مشتری باید برای هر مشتری (با update_code + website_url ثبت‌شده در پنل):
+1. **لیست پکیج‌ها**: `GET /api/v1/packages` با هدرهای `Authorization: Bearer {update_code}` + `X-Project-Url: https://{مشتری-دامنه}`.
+2. **نمایش دکمه**: برای هر آیتم اگر `is_purchased == true` → دکمه «دانلود» (نه «خرید»); `purchased_license.days_remaining` هم برای هشدار انقضای نزدیک.
+3. **دانلود**: دو راه —
+   - ساده: `POST /api/v1/packages/{slug}/download-url` → بگذار `download_url` را مستقیم در `href` دکمه (مرورگر مشتری بدون هدر دانلود می‌کند؛ ۱۵ دقیقه/یک‌بار).
+   - یا: `GET /api/v1/packages/{slug}/download` با هدرها از بک‌اند خودتان proxy کنید (برای شمارش/IP یا هر منطق دیگر).
+4. **خرید/تمدید**: `POST /packages/{slug}/purchase` مثل قبل (پرداخت درگاه) یا اگر لایسنس منقضی شده → همان خرید = تمدید.
+همه پاسخ‌های خطا فارسی‌اند: 403 «شما این پکیج را نخریده‌اید یا لایسنس شما فعال نیست.» وقتی لایسنس فعال نیست.
 
 ---
 
@@ -108,7 +123,7 @@ purchase با `callback_url` سایت خود مشتری → مشتری به در
 
 ### مسیر وب (فروشگاه)
 checkout در `Shop\PackageShow::buy()`: کد آپدیت → Customer → گارد one_time (`hasCustomerUsed`) → رایگان؟ → لایسنس فوری + ریدایرکت به `payment.result` : خرید pending با `callback_url = route('payment.callback')` + gateway انتخابی → `createPayment($purchase, $gateway)` → ریدایرکت به `payment_url` (بانک) → بازگشت به `/payment/callback` (GET/POST، بدون CSRF) → `verifyPayment($trx, renew: true)` → ریدایرکت `/payment/result/{purchase}`:
-- paid: کلید لایسنس + انقضا + دکمه دانلود (توکن ۱۵ دقیقه → `api.packages.download`)
+- paid: پیام «پکیج «X» در پروژه شما تمدید شد (یا برای پروژه شما فعال شد) و می‌توانید از صفحه پکیج‌ها آن را دانلود کنید» + کلید لایسنس + انقضا (دکمه دانلود حذف شده — دانلود از صفحه پکیج‌های پروژه فروشگاه مشتری انجام می‌شود)
 - failed: دلیل (`meta.fail_reason`) + تلاش مجدد؛ pending: دکمه «بررسی مجدد» → `recheck()`.
 
 > **نکته:** درگاه‌ها در جدول `gateways` به‌صورت پیش‌فرض ۱۱ ردیف `is_active=0` دارند؛ برای فعال‌شدن خریدِ پرداختی باید در `/admin/settings/gateways` فعال + پیکربندی شوند. (در دمو فعال نیست — صفحه checkout پیام آمبر نشان می‌دهد.)
@@ -181,7 +196,7 @@ $PHP artisan tinker --execute="
 
 - همه ۱۳ بخش ادمین + فروشگاه + پرداخت + CKEditor + لودینگ **کامل و تست‌شده** (curl + Livewire::test + browser E2E)؛ `laravel.log` پاک.
 - دیتای دمو (seed با `demo-seed.php`): ۳ پروژه، ۵ پکیج (۴ فعال؛ `modern-shop-theme` رایگان)، ۱۵ نسخه، ۸ پلن، ۸ مشتری، ۶ لایسنس، ۶ خرید، ۵ اشتراک، ۴ آپدیت، ۱۱ درگاه (غیرفعال).
-- فایل ZIP نسخه‌های دمو واقعی روی دیسک نیستند (download_link ها دموی متنی‌اند) — دانلود توکنی مسیرش درست است ولی فایل 404 خواهد بود مگر فایل واقعی در `storage/app/private/...` یا مسیر ثبت‌شده بگذارید.
+- فایل‌های ZIP دموِ کوچک (README داخل هر zip) در `storage/app/private/packages/*.zip` موجودند تا مسیر دانلود کاملاً تست‌شودنی باشد؛ در محیط واقعی فایل‌های ZIP واقعی هر نسخه را از پنل ادمین آپلود کنید (فایل دقیقاً در `file_path` ثبت‌شده ذخیره می‌شود).
 
 ### محدودیت‌ها / پیشنهادهای ادامه کار
 1. **تنظیم درگاه واقعی** لازم است تا خریدِ پرداختی وب/API کار کند (فعال‌سازی + merchantId در `/admin/settings/gateways`).

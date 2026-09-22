@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Package;
+use App\Models\PackageLicense;
 use App\Models\PackagePricingPlan;
 use App\Models\PackagePurchase;
 use App\Services\LicenseService;
@@ -26,6 +27,8 @@ class ApiPackageController extends Controller
     /* ===================================================================
      *  GET /api/v1/packages
      *  لیست پکیج‌های قابل دسترس برای این مشتری (پکیج‌های پروژه‌ای که مشتری اشتراک دارد)
+     *  + پرچم is_purchased برای هر پکیج (لایسنس فعال دارد؟) تا پروژه خریدار
+     *    بتواند به‌جای «خرید»، دکمه «دانلود» نمایش دهد.
      * =================================================================== */
     public function index(Request $request): JsonResponse
     {
@@ -54,8 +57,16 @@ class ApiPackageController extends Controller
                 ->orderByDesc('created_at')
                 ->paginate($request->input('per_page', 15));
 
+            // لایسنس‌های فعالِ این مشتری برای پکیج‌های همین صفحه (یک کوئری)
+            $licenses = $this->activeLicensesFor(
+                $customer,
+                $packages->getCollection()->pluck('id')->all()
+            );
+
             return response()->json([
-                'data' => $packages->items(),
+                'data' => $packages->getCollection()->map(function (Package $package) use ($licenses) {
+                    return $this->appendPurchaseInfo($package, $licenses->get($package->id));
+                })->values(),
                 'meta' => [
                     'current_page' => $packages->currentPage(),
                     'last_page'    => $packages->lastPage(),
@@ -104,15 +115,9 @@ class ApiPackageController extends Controller
             $license = $this->authService->getActiveLicense($customer, $slug);
 
             return response()->json([
-                'data' => array_merge(
-                    $package->toArray(),
-                    [
-                        'installed_license' => $license ? [
-                            'license_key'    => $license->license_key,
-                            'expires_at'     => $license->expires_at?->toDateTimeString(),
-                            'days_remaining' => $license->days_remaining,
-                        ] : null,
-                    ]
+                'data' => $this->appendPurchaseInfo(
+                    $package,
+                    $license ? collect([$license->package_id => $license])->get($package->id) : null
                 ),
             ]);
         } catch (RuntimeException $e) {
@@ -405,6 +410,48 @@ class ApiPackageController extends Controller
         } catch (RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
         }
+    }
+
+    /* ===================================================================
+     *  Helper - لایسنس‌های فعال مشتری برای مجموعه‌ای از پکیج‌ها (کلید = package_id)
+     * =================================================================== */
+    private function activeLicensesFor(Customer $customer, array $packageIds)
+    {
+        if (empty($packageIds)) {
+            return collect();
+        }
+
+        return PackageLicense::where('customer_id', $customer->id)
+            ->where('status', PackageLicense::STATUS_ACTIVE)
+            ->whereIn('package_id', $packageIds)
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->get()
+            ->keyBy('package_id');
+    }
+
+    /* ===================================================================
+     *  Helper - افزودن اطلاعات خرید/لایسنس به خروجی پکیج
+     *  is_purchased => true یعنی پروژه خریدار باید دکمه «دانلود» نشان دهد
+     * =================================================================== */
+    private function appendPurchaseInfo(Package $package, ?PackageLicense $license): array
+    {
+        return array_merge($package->toArray(), [
+            'is_purchased' => $license !== null,
+            'purchased_license' => $license ? [
+                'license_key'    => $license->license_key,
+                'expires_at'     => $license->expires_at?->toDateTimeString(),
+                'days_remaining' => $license->days_remaining,
+                'is_unlimited'   => $license->expires_at === null,
+            ] : null,
+            // نام قدیمی برای سازگاری با یکپارچه‌سازی‌های فعلی
+            'installed_license' => $license ? [
+                'license_key'    => $license->license_key,
+                'expires_at'     => $license->expires_at?->toDateTimeString(),
+                'days_remaining' => $license->days_remaining,
+            ] : null,
+        ]);
     }
 
     /* ===================================================================
