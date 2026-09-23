@@ -217,8 +217,15 @@ class PaymentService
             }
 
         } catch (InvalidPaymentException $e) {
+            // درگاه «تست»: دکمه «پرداخت ناموفق» این مسیر را شبیه‌سازی می‌کند؛
+            // پیام پیش‌فرض درایور local «لغو توسط خریدار» است که گمراه‌کننده است.
+            $isTestGateway = ($purchase->gateway === 'local');
+            $failReason = $isTestGateway
+                ? 'پرداخت ناموفق بود (شبیه‌سازی درگاه تست).'
+                : $e->getMessage();
+
             // خطای اختصاصی پرداخت
-            $purchase->markAsFailed($e->getMessage());
+            $purchase->markAsFailed($failReason);
 
             Log::error('Invalid payment exception', [
                 'transaction_id' => $transactionId,
@@ -229,7 +236,9 @@ class PaymentService
 
             return [
                 'paid'    => false,
-                'message' => 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
+                'message' => $isTestGateway
+                    ? $failReason
+                    : 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
             ];
 
         } catch (\Exception $e) {

@@ -23,15 +23,15 @@ return [
     |
     */
     'drivers' => [
-        // درگاه آزمایشی — برای تست جریان پرداخت بدون درگاه واقعی
+        // درگاه «تست» — درگاه داخلی توسعه؛ بدون کلید و بدون پرداخت واقعی
         // تنظیمات (title/description/...) از جدول gateways خوانده می‌شود (get_gateway_configs)
         'local' => [
-            'title' => 'درگاه پرداخت آزمایشی',
-            'description' => 'این درگاه فقط برای تست جریان پرداخت است — پول واقعی کم نمی‌شود',
-            'orderLabel' => 'شماره سفارش',
+            'title' => 'تست',
+            'description' => 'درگاه داخلی توسعه — بدون کلید و بدون پرداخت واقعی',
+            'orderLabel' => 'شماره تراکنش',
             'amountLabel' => 'مبلغ',
-            'payButton' => 'پرداخت (موفق)',
-            'cancelButton' => 'لغو پرداخت',
+            'payButton' => 'پرداخت موفق',
+            'cancelButton' => 'پرداخت ناموفق',
             'callbackUrl' => 'http://yoursite.com/path/to',
         ],
         'fanavacard' => [

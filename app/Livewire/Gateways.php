@@ -77,6 +77,10 @@ class Gateways extends Component
     public static function schema(): array
     {
         return [
+            // درگاه «تست» — درگاه داخلی توسعه؛ بدون کلید و پیکربندی.
+            // صفحه شبیه‌ساز آن دکمه‌های «پرداخت موفق / پرداخت ناموفق» دارد و
+            // دقیقاً همان کاری را می‌کند که درگاه واقعی انجام می‌دهد.
+            'local' => ['label' => 'درگاه تست (داخلی)', 'fields' => []],
             'payir' => ['label' => 'درگاه pay.ir', 'fields' => [
                 ['name' => 'merchantId', 'label' => 'api کد', 'type' => 'text'],
             ]],
