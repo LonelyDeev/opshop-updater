@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Gateway;
 use App\Models\PackagePurchase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
@@ -23,9 +24,10 @@ class PaymentService
         if (!$callbackUrl) {
             throw new RuntimeException('callback_url تنظیم نشده است.');
         }
+
         try {
             // 1️⃣ تنظیمات درگاه
-            $gateway = $gateway ?? 'zarinpal';
+            $gateway = $gateway ?? Gateway::where('is_active', true)->first()?->key;
             $gatewayConfigs = get_gateway_configs($gateway);
 
             // 2️⃣ ایجاد Invoice
