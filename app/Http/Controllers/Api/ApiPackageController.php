@@ -131,8 +131,8 @@ class ApiPackageController extends Controller
      *  Body: { callback_url, pricing_plan_id, gateway? }
      *  Response: { payment_url, transaction_id, amount, gateway, purchase_id }
      *  - پکیج/طرح رایگان: { is_free, license_key, expires_at, download_token }
-     *  - gateway اختیاری است (پیش‌فرض zarinpal)؛ کلاینت می‌تواند درگاه فعال دیگری
-     *    را انتخاب کند (مثلاً «local» برای تست جریان پرداخت).
+     *  - gateway اختیاری است (پیش‌فرض: اولین درگاهِ فعال از جدول gateways)؛ کلاینت
+     *    می‌تواند درگاه فعال دیگری را انتخاب کند (مثلاً «local» برای تست جریان پرداخت).
      *  - payment_url برای درایورهای URL مستقیم است؛ برای درایورهای فرم‌محور
      *    یک مسیر امضادار روی پنل است که فرم را رندر و خودکار به درگاه POST می‌کند.
      * =================================================================== */

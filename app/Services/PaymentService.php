@@ -24,10 +24,13 @@ class PaymentService
         if (!$callbackUrl) {
             throw new RuntimeException('callback_url تنظیم نشده است.');
         }
-
         try {
             // 1️⃣ تنظیمات درگاه
             $gateway = $gateway ?? Gateway::where('is_active', true)->first()?->key;
+
+            if (!$gateway) {
+                throw new RuntimeException('هیچ درگاه پرداخت فعالی تنظیم نشده است. (پنل → تنظیمات → درگاه‌ها)');
+            }
             $gatewayConfigs = get_gateway_configs($gateway);
 
             // 2️⃣ ایجاد Invoice
