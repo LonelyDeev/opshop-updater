@@ -20,20 +20,17 @@ class PaymentService
             throw new RuntimeException('مبلغ تراکنش باید بزرگ‌تر از صفر باشد.');
         }
 
-        $callbackUrl = $purchase->callback_url;
-        if (!$callbackUrl) {
-            throw new RuntimeException('callback_url تنظیم نشده است.');
-        }
         try {
-            // 1️⃣ تنظیمات درگاه
-            $gateway = $gateway ?? Gateway::where('is_active', true)->first()?->key;
-
-            if (!$gateway) {
-                throw new RuntimeException('هیچ درگاه پرداخت فعالی تنظیم نشده است. (پنل → تنظیمات → درگاه‌ها)');
-            }
+            // 1️⃣ تنظیمات درگاه (پیش‌فرض: اولین درگاهِ فعال پنل)
+            $gateway = $gateway ?? Gateway::where('is_active', true)->first()?->key ?? 'zarinpal';
             $gatewayConfigs = get_gateway_configs($gateway);
 
-            // 2️⃣ ایجاد Invoice
+            // 2️⃣ آدرس کال‌بک درگاه: کاربر پس از پرداخت ابتدا به صفحه‌ی «نتیجه پرداخت» پنل
+            // برمی‌گردد (نمایش وضعیت + شمارش معکسه‌ی ۱۰ ثانیه‌ای) و از همان صفحه به
+            // callback_url فروشگاه (که هنگام ایجاد خرید ثبت شده) بازگردانده می‌شود.
+            $callbackUrl = URL::route('payment.callback');
+
+            // 3️⃣ ایجاد Invoice
             $invoice = (new Invoice)
                 ->amount(intval($purchase->amount))
                 ->detail('description', "خرید پکیج {$purchase->package->name} - {$purchase->package->slug}")
@@ -42,7 +39,7 @@ class PaymentService
                 ->detail('customer_id', $purchase->customer_id)
                 ->detail('pricing_plan_id', $purchase->pricing_plan_id);
 
-            // 3️⃣ ایجاد پرداخت
+            // 4️⃣ ایجاد پرداخت
             $payment = Payment::via($gateway)
                 ->config($gatewayConfigs)
                 ->callbackUrl($callbackUrl)
@@ -63,7 +60,7 @@ class PaymentService
                     }
                 );
 
-            // 4️⃣ اجرای پرداخت و دریافت فرم/آدرس
+            // 5️⃣ اجرای پرداخت و دریافت فرم/آدرس
             // نکته: در این نسخه شتابیت، pay() یک RedirectionForm برمی‌گرداند؛
             // متد getPaymentUrl() وجود ندارد (باگ قبلی: Call to undefined method).
             /** @var \Shetabit\Multipay\RedirectionForm $form */
@@ -75,7 +72,7 @@ class PaymentService
                 throw new RuntimeException('دریافت آدرس پرداخت از درگاه ناموفق بود.');
             }
 
-            // 5️⃣ آپدیت نهایی
+            // 6️⃣ آپدیت نهایی
             $purchase->update([
                 'payment_url' => $paymentUrl,
                 'status'      => 'pending',
@@ -222,15 +219,8 @@ class PaymentService
             }
 
         } catch (InvalidPaymentException $e) {
-            // درگاه «تست»: دکمه «پرداخت ناموفق» این مسیر را شبیه‌سازی می‌کند؛
-            // پیام پیش‌فرض درایور local «لغو توسط خریدار» است که گمراه‌کننده است.
-            $isTestGateway = ($purchase->gateway === 'local');
-            $failReason = $isTestGateway
-                ? 'پرداخت ناموفق بود (شبیه‌سازی درگاه تست).'
-                : $e->getMessage();
-
             // خطای اختصاصی پرداخت
-            $purchase->markAsFailed($failReason);
+            $purchase->markAsFailed($e->getMessage());
 
             Log::error('Invalid payment exception', [
                 'transaction_id' => $transactionId,
@@ -241,9 +231,7 @@ class PaymentService
 
             return [
                 'paid'    => false,
-                'message' => $isTestGateway
-                    ? $failReason
-                    : 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
+                'message' => 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
             ];
 
         } catch (\Exception $e) {

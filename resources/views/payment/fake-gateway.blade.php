@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $title ?? 'تست' }} — درگاه پرداخت</title>
+    <title>{{ $title ?? 'درگاه پرداخت آزمایشی' }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: Tahoma, Arial, sans-serif; }
         body {
@@ -54,7 +54,6 @@
         .gw-row.total .k { color: #92400e; font-weight: 700; }
         .gw-row.total .v { color: #92400e; font-size: 18px; }
         .gw-actions { display: grid; gap: 10px; margin-top: 20px; }
-        @media (min-width: 400px) { .gw-actions { grid-template-columns: 1fr 1fr; } }
         .gw-btn {
             display: block;
             text-align: center;
@@ -66,12 +65,11 @@
             cursor: pointer;
             border: 0;
             width: 100%;
-            transition: background .15s ease;
         }
         .gw-btn-pay { background: #059669; color: #fff; }
         .gw-btn-pay:hover { background: #047857; }
-        .gw-btn-fail { background: #dc2626; color: #fff; }
-        .gw-btn-fail:hover { background: #b91c1c; }
+        .gw-btn-cancel { background: #f3f4f6; color: #374151; }
+        .gw-btn-cancel:hover { background: #e5e7eb; }
         .gw-note {
             margin-top: 16px;
             font-size: 11px;
@@ -89,18 +87,6 @@
             padding: 3px 10px;
             margin-top: 2px;
         }
-        .gw-hint {
-            margin-top: 12px;
-            display: grid;
-            gap: 4px;
-            font-size: 11.5px;
-            line-height: 1.7;
-            color: #6b7280;
-        }
-        .gw-hint span { display: inline-flex; align-items: center; gap: 6px; }
-        .dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
-        .dot-ok { background: #059669; }
-        .dot-no { background: #dc2626; }
     </style>
 </head>
 <body>
@@ -108,8 +94,8 @@
         <div class="gw-head">
             <div class="logo">&#128179;</div>
             <div>
-                <h1>{{ $title ?? 'تست' }}</h1>
-                <p>{{ $subtitle ?? 'درگاه داخلی توسعه — بدون کلید و بدون پرداخت واقعی' }}</p>
+                <h1>{{ $title ?? 'درگاه پرداخت آزمایشی' }}</h1>
+                <p>{{ $subtitle ?? '' }}</p>
             </div>
         </div>
         <div class="gw-body">
@@ -130,16 +116,13 @@
                 <span class="v">{{ number_format((float) $amount) }} ریال</span>
             </div>
             <div class="gw-actions">
-                <a class="gw-btn gw-btn-pay" href="{{ $successUrl }}">{{ $payButton ?? 'پرداخت موفق' }}</a>
-                <a class="gw-btn gw-btn-fail" href="{{ $cancelUrl }}">{{ $cancelButton ?? 'پرداخت ناموفق' }}</a>
-            </div>
-            <div class="gw-hint">
-                <span><i class="dot dot-ok"></i> «پرداخت موفق» دقیقاً کاری را می‌کند که درگاه واقعی پس از تأیید پرداخت انجام می‌دهد.</span>
-                <span><i class="dot dot-no"></i> «پرداخت ناموفق» مسیر ناموفق درگاه واقعی را شبیه‌سازی می‌کند.</span>
+                <a class="gw-btn gw-btn-pay" href="{{ $successUrl }}">{{ $payButton ?? 'پرداخت (موفق)' }}</a>
+                <a class="gw-btn gw-btn-cancel" href="{{ $cancelUrl }}">{{ $cancelButton ?? 'لغو پرداخت' }}</a>
             </div>
             <p class="gw-note">
-                <span class="gw-badge">درگاه تستی</span><br>
-                این درگاه فقط برای توسعه و تست داخلی است؛ پول واقعی جابه‌جا نمی‌شود.
+                <span class="gw-badge">SANDBOX</span><br>
+                این صفحه فقط شبیه‌ساز درگاه است؛ پرداخت واقعی انجام نمی‌شود.<br>
+                «پرداخت» شما را به کال‌بک فروشگاه می‌فرستد و جریان تأیید/لایسنس اجرا می‌شود.
             </p>
         </div>
     </div>

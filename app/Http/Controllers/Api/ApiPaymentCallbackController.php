@@ -8,8 +8,6 @@ use App\Services\LicenseService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use packages\shetabit\payment\src\Facade\Payment;
-use Shetabit\Payment\Models\Transaction;
 
 class ApiPaymentCallbackController extends Controller
 {
@@ -22,6 +20,10 @@ class ApiPaymentCallbackController extends Controller
      *  GET /api/v1/payments/callback
      *  کال‌بک درگاه shetabit (کاربر از درگاه اینجا برمی‌گرده)
      *  Query: transaction_id (یا Authority برای زرین‌پال)
+     *
+     *  پس از تأیید پرداخت، کاربر به صفحه‌ی «نتیجه پرداخت» پنل
+     *  (payment/return) هدایت می‌شود تا وضعیت پرداخت را ببیند و با
+     *  دکمه/شمارش معکوس ۱۰ ثانیه‌ای به callback_url فروشگاه برگردد.
      * =================================================================== */
     public function callback(Request $request)
     {
@@ -46,37 +48,34 @@ class ApiPaymentCallbackController extends Controller
         // تأیید پرداخت
         $result = $this->paymentService->verifyPayment($transactionId);
 
-        if ($result['paid'] ?? false) {
-            // خرید موفق - ریدایرکت به callback_url پروژه خریدار
-            $callbackUrl = $purchase->callback_url;
-            if ($callbackUrl) {
-                $separator = str_contains($callbackUrl, '?') ? '&' : '?';
-                $finalUrl = $callbackUrl . $separator . http_build_query([
-                        'transaction_id' => $transactionId,
-                        'status'         => 'success',
-                        'purchase_id'    => $purchase->id,
-                    ]);
-
-                return redirect($finalUrl);
-            }
-
-            return redirect()->route('payment.result', $purchase)
-                ->with('success', 'پرداخت با موفقیت تأیید شد.');
+        // صفحه‌ی نتیجه + شمارش معکوس برای بازگشت به فروشگاه
+        if ($purchase->callback_url && !$this->isInternalCallback($purchase->callback_url)) {
+            return redirect()->route('payment.return', array_merge($request->query(), [
+                'purchase' => $purchase->id,
+            ]));
         }
 
-        // پرداخت ناموفق
-        if ($purchase->callback_url) {
-            $separator = str_contains($purchase->callback_url, '?') ? '&' : '?';
-            $finalUrl = $purchase->callback_url . $separator . http_build_query([
-                    'transaction_id' => $transactionId,
-                    'status'         => 'failed',
-                    'error'          => $result['message'] ?? 'پرداخت ناموفق بود.',
-                ]);
-
-            return redirect($finalUrl);
-        }
-
+        // callback داخلی/ویترین پنل → صفحه‌ی نتیجه‌ی خود پنل
         return redirect()->route('payment.result', $purchase)
-            ->with('error', $result['message'] ?? 'پرداخت ناموفق بود.');
+            ->with(($result['paid'] ?? false) ? 'success' : 'error',
+                $result['message'] ?? (($result['paid'] ?? false) ? 'پرداخت با موفقیت تأیید شد.' : 'پرداخت ناموفق بود.'));
+    }
+
+    /**
+     * آیا callback_url به یکی از مسیرهای کال‌بک خود پنل اشاره می‌کند؟
+     */
+    private function isInternalCallback(string $url): bool
+    {
+        $given = [parse_url($url, PHP_URL_HOST), rtrim((string) parse_url($url, PHP_URL_PATH), '/')];
+
+        foreach ([route('payment.callback'), route('api.packages.payment.callback')] as $panelUrl) {
+            $panel = [parse_url($panelUrl, PHP_URL_HOST), rtrim((string) parse_url($panelUrl, PHP_URL_PATH), '/')];
+
+            if ($given === $panel) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

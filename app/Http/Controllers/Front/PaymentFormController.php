@@ -50,12 +50,13 @@ class PaymentFormController extends Controller
 
     /**
      * داده‌های صفحه شبیه‌ساز درگاه آزمایشی (local)
-     * successUrl/cancelUrl دقیقاً مطابق منطق درایور Local ساخته می‌شوند:
-     * callback_url + transactionId (و برای لغو: cancel=true)
+     * successUrl/cancelUrl به کال‌بک خود پنل اشاره می‌کنند تا پس از پرداخت،
+     * صفحه‌ی «نتیجه پرداخت» (وضعیت + شمارش معکوس) نمایش داده شود و سپس
+     * کاربر به callback_url فروشگاه برگردد (مطابق منطق PaymentService).
      */
     private function fakeGatewayData(PackagePurchase $purchase): array
     {
-        $callback = $purchase->callback_url;
+        $callback = route('payment.callback');
         $separator = str_contains($callback, '?') ? '&' : '?';
         $trx = (string) $purchase->transaction_id;
 
@@ -66,10 +67,10 @@ class PaymentFormController extends Controller
             'package'    => $purchase->package,
             'plan'       => $purchase->pricingPlan,
             'amount'     => $purchase->amount,
-            'title'      => $gateway?->config('title') ?? 'تست',
-            'subtitle'   => $gateway?->config('description') ?? 'درگاه داخلی توسعه — بدون کلید و بدون پرداخت واقعی',
-            'payButton'  => $gateway?->config('payButton') ?? 'پرداخت موفق',
-            'cancelButton' => $gateway?->config('cancelButton') ?? 'پرداخت ناموفق',
+            'title'      => $gateway?->config('title') ?? 'درگاه پرداخت آزمایشی',
+            'subtitle'   => $gateway?->config('description') ?? 'این درگاه فقط برای تست جریان پرداخت است — پول واقعی کم نمی‌شود',
+            'payButton'  => $gateway?->config('payButton') ?? 'پرداخت (موفق)',
+            'cancelButton' => $gateway?->config('cancelButton') ?? 'لغو پرداخت',
             'successUrl' => $callback . $separator . http_build_query(['transactionId' => $trx]),
             'cancelUrl'  => $callback . $separator . http_build_query(['transactionId' => $trx, 'cancel' => 'true']),
         ];

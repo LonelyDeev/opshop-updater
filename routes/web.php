@@ -17,6 +17,11 @@ Route::get('payment/callback', [\App\Http\Controllers\Front\WebPaymentController
 Route::post('payment/callback', [\App\Http\Controllers\Front\WebPaymentController::class, 'callback'])->name('payment.callback.post');
 Route::get('payment/result/{purchase}', \App\Livewire\Shop\PaymentResult::class)->name('payment.result');
 
+// صفحه «نتیجه پرداخت» (مرحله میانی پس از درگاه):
+// وضعیت پرداخت + شمارش معکوس ۱۰ ثانیه‌ای + دکمه بازگشت به callback_url فروشگاه
+Route::get('payment/return/{purchase}', [\App\Http\Controllers\Front\PaymentReturnController::class, 'show'])
+    ->name('payment.return');
+
 // فرم پرداخت درایورهای فرم‌محور + شبیه‌ساز درگاه آزمایشی (local)
 // payment_url خریدهای API برای این درایورها به این مسیر امضادار اشاره می‌کند.
 Route::get('payment/form/{purchase}', [\App\Http\Controllers\Front\PaymentFormController::class, 'show'])

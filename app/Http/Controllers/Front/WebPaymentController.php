@@ -13,6 +13,11 @@ use Illuminate\Http\Request;
  * درگاه بانکی پس از پرداخت کاربر را به /payment/callback برمی‌گرداند.
  * هم GET و هم POST پشتیبانی می‌شود (POST درگاه‌ها CSRF ندارند →
  * مسیر payment/callback در استثناهای VerifyCsrfToken قرار دارد).
+ *
+ * پس از تأیید پرداخت:
+ *  - خریدهای API (callback_url بیرونی) → صفحه‌ی «نتیجه پرداخت» (payment/return)
+ *    تا وضعیت + شمارش معکوس ۱۰ ثانیه‌ای نمایش داده شود و سپس به فروشگاه برگردد.
+ *  - خریدهای ویترین خود پنل → صفحه‌ی نتیجه‌ی خود پنل (payment/result) مانند قبل.
  */
 class WebPaymentController extends Controller
 {
@@ -49,11 +54,36 @@ class WebPaymentController extends Controller
 
         $purchase->refresh();
 
+        // خرید فروشگاه (API): ابتدا صفحه‌ی نتیجه + شمارش معکوس، سپس بازگشت به فروشگاه
+        if ($purchase->callback_url && !$this->isInternalCallback($purchase->callback_url)) {
+            return redirect()->route('payment.return', array_merge($request->query(), [
+                'purchase' => $purchase->id,
+            ]));
+        }
+
         return redirect()
             ->route('payment.result', $purchase)
             ->with(
                 ($result['paid'] ?? false) ? 'success' : 'error',
                 $result['message'] ?? (($result['paid'] ?? false) ? 'پرداخت با موفقیت تأیید شد.' : 'پرداخت ناموفق بود.')
             );
+    }
+
+    /**
+     * آیا callback_url به یکی از مسیرهای کال‌بک خود پنل اشاره می‌کند؟
+     */
+    private function isInternalCallback(string $url): bool
+    {
+        $given = [parse_url($url, PHP_URL_HOST), rtrim((string) parse_url($url, PHP_URL_PATH), '/')];
+
+        foreach ([route('payment.callback'), route('api.packages.payment.callback')] as $panelUrl) {
+            $panel = [parse_url($panelUrl, PHP_URL_HOST), rtrim((string) parse_url($panelUrl, PHP_URL_PATH), '/')];
+
+            if ($given === $panel) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

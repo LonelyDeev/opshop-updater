@@ -77,7 +77,7 @@ class LicenseService
     public function renewLicense(PackageLicense $oldLicense,PackagePurchase $newPurchase,PackagePricingPlan $plan): PackageLicense {
         // جلوگیری از تمدید طرح‌های یک‌بار مصرف
         if ($plan->is_one_time) {
-            throw new RuntimeException(
+            throw new \RuntimeException(
                 'این طرح یک‌بار مصرف است و قابل تمدید نیست. لطفاً طرح دیگری انتخاب کنید.'
             );
         }
@@ -85,7 +85,7 @@ class LicenseService
         // اگر لایسنس قبلی از یک طرح one-time بوده، جلوگیری از تمدید
         $oldPlan = $oldLicense->purchase?->pricingPlan;
         if ($oldPlan && $oldPlan->is_one_time) {
-            throw new RuntimeException(
+            throw new \RuntimeException(
                 'لایسنس فعلی شما از طرح یک‌بار مصرف است و قابل تمدید نیست. لطفاً طرح دیگری انتخاب کنید.'
             );
         }
