@@ -30,6 +30,7 @@
                 <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">جزئیات پرداخت، مشتری و لایسنس صادرشده.</p>
             </div>
         </div>
+        <x-btn variant="danger-soft" icon="trash" wire:click="$set('confirmingDelete', true)">حذف خرید</x-btn>
     </div>
 
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -244,4 +245,23 @@
             <pre class="overflow-auto rounded-xl bg-zinc-50 p-4 font-mono text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" dir="ltr">{{ json_encode($purchase->meta, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
         </x-card>
     @endif
+
+    {{-- delete confirm --}}
+    <x-modal wire:model="confirmingDelete" title="حذف خرید" size="sm">
+        @if($confirmingDelete)
+            <div class="space-y-4">
+                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
+                    <x-icon name="trash" class="size-6 shrink-0" />
+                    <p class="text-sm leading-6">
+                        خرید #<strong>{{ fa_num($purchase->id) }}</strong> برای همیشه حذف شود؟
+                        این عمل قابل بازگشت نیست؛ لایسنس صادرشده (در صورت وجود) باقی می‌ماند اما پیوندش با این خرید قطع می‌شود.
+                    </p>
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <x-btn variant="secondary" wire:click="$set('confirmingDelete', false)">انصراف</x-btn>
+                    <x-btn variant="danger" icon="trash" wire:click="delete" :loading="true">حذف قطعی</x-btn>
+                </div>
+            </div>
+        @endif
+    </x-modal>
 </div>

@@ -14,8 +14,8 @@ class PackageLicense extends Model
 
     protected $fillable = [
         'license_key', 'package_id', 'customer_id', 'purchase_id',
-        'subscription_request_id', 'renewed_from', 'status', 'starts_at',
-        'expires_at', 'duration_months', 'notes',
+        'renewed_from', 'status', 'starts_at', 'expires_at',
+        'duration_months', 'notes',
     ];
 
     protected $casts = [
@@ -43,12 +43,6 @@ class PackageLicense extends Model
     public function purchase(): BelongsTo
     {
         return $this->belongsTo(PackagePurchase::class);
-    }
-
-    /** درخواست اشتراکی که باعث صدور/تمدید این لایسنس شده است */
-    public function subscriptionRequest(): BelongsTo
-    {
-        return $this->belongsTo(SubscriptionRequest::class);
     }
 
     public function renewedFrom(): BelongsTo

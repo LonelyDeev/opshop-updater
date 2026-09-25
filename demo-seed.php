@@ -8,7 +8,6 @@ $app = require __DIR__ . '/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Models\Customer;
-use App\Models\Gateway;
 use App\Models\Package;
 use App\Models\PackageImage;
 use App\Models\PackageLicense;
@@ -17,8 +16,8 @@ use App\Models\PackagePurchase;
 use App\Models\PackageVersion;
 use App\Models\Project;
 use App\Models\Subscription;
+use App\Models\SubscriptionOrder;
 use App\Models\SubscriptionPlan;
-use App\Models\SubscriptionRequest;
 use App\Models\Update;
 use Illuminate\Support\Str;
 
@@ -201,101 +200,135 @@ PackageLicense::updateOrCreate(['customer_id' => $expiredCustomer->id, 'package_
     'duration_months' => 12,
 ]);
 
-// ---------- درگاه آزمایشی (local) — برای تست جریان پرداخت بدون درگاه واقعی ----------
-// (برای محیط واقعی غیرفعالش کنید یا درگاه بانکی واقعی را در تنظیمات→درگاه‌ها فعال کنید)
-Gateway::updateOrCreate(['key' => 'local'], ['is_active' => true]);
-
 // ---------- subscription plans (طرح‌های اشتراک) ----------
 $planData = [
     [
-        'name' => 'پلن رایگان شروع', 'description' => 'برای آشنایی با پکیج‌های ما — بدون هزینه، پس از تأیید مدیر فعال می‌شود.',
-        'duration_months' => 1, 'price' => 0, 'discount_price' => null,
-        'is_free' => true, 'is_one_time' => true, 'is_active' => true, 'sort_order' => 1,
-        'features' => ['دسترسی به ۲ پکیج منتخب', 'پشتیبانی پایه', 'آپدیت‌های امنیتی'],
+        'name' => 'اشتراک پایه', 'slug' => 'basic-monthly', 'duration' => 1, 'price' => 0, 'discount' => null,
+        'one_time' => true, 'active' => true, 'order' => 1,
+        'description' => 'برای آشنایی با سیستم؛ یک‌ماهه و کاملاً رایگان — فقط یک‌بار قابل استفاده.',
+        'features' => ['پشتیبانی رایگان', 'دریافت آپدیت‌های امنیتی', 'دسترسی به پکیج‌های منتخب'],
     ],
     [
-        'name' => 'پلن یک‌ماهه', 'description' => 'دسترسی یک‌ماهه به همه پکیج‌های پلن.',
-        'duration_months' => 1, 'price' => 350000, 'discount_price' => null,
-        'is_free' => false, 'is_one_time' => false, 'is_active' => true, 'sort_order' => 2,
-        'features' => ['دسترسی به همه پکیج‌های پلن', 'پشتیبانی اولویت‌دار', 'آپدیت‌های امنیتی و ارتقا', 'نصب روی یک دامنه'],
+        'name' => 'اشتراک حرفه‌ای', 'slug' => 'pro-quarterly', 'duration' => 3, 'price' => 1200000, 'discount' => 300000,
+        'one_time' => false, 'active' => true, 'order' => 2,
+        'description' => 'سه ماه دسترسی کامل با اولویت پشتیبانی و پکیج‌های رایگان همراه.',
+        'features' => ['پشتیبانی اولویت‌دار (۴۸ ساعت)', 'نصب رایگان پکیج‌ها', 'مشاوره سئو ماهانه', 'گزارش عملکرد پروژه'],
     ],
     [
-        'name' => 'پلن سه‌ماهه', 'description' => 'دسترسی سه‌ماهه با تخفیف — بهترین شروع برای کسب‌وکارهای کوچک.',
-        'duration_months' => 3, 'price' => 900000, 'discount_price' => 720000,
-        'is_free' => false, 'is_one_time' => false, 'is_active' => true, 'sort_order' => 3,
-        'features' => ['دسترسی به همه پکیج‌های پلن', 'پشتیبانی اولویت‌دار', 'آپدیت‌های امنیتی و ارتقا', 'نصب روی دو دامنه', 'مشاوره نصب'],
-    ],
-    [
-        'name' => 'پلن یک‌ساله حرفه‌ای', 'description' => 'دسترسی کامل یک‌ساله — محبوب‌ترین انتخاب مشتریان.',
-        'duration_months' => 12, 'price' => 3600000, 'discount_price' => 2800000,
-        'is_free' => false, 'is_one_time' => false, 'is_active' => true, 'sort_order' => 4,
-        'features' => ['دسترسی به همه پکیج‌های پلن', 'پشتیبانی اختصاصی ۲۴/۷', 'همه آپدیت‌ها و نسخه‌های جدید', 'نصب روی پنج دامنه', 'مشاوره نصب و راه‌اندازی', 'اولویت توسعه فیچرهای سفارشی'],
-    ],
-    [
-        'name' => 'پلن دائمی ویژه', 'description' => 'یک‌بار بخرید، همیشه استفاده کنید — محدودیت یک‌بارمصرف.',
-        'duration_months' => 0, 'price' => 12000000, 'discount_price' => null,
-        'is_free' => false, 'is_one_time' => true, 'is_active' => true, 'sort_order' => 5,
-        'features' => ['دسترسی دائمی به پکیج‌های پلن', 'پشتیبانی اختصاصی ۲۴/۷', 'همه آپدیت‌های آینده', 'نامحدود در دامنه‌های خودتان', 'مهاجرت و نصب رایگان'],
-    ],
-    [
-        'name' => 'پلن شش‌ماهه (غیرفعال)', 'description' => 'نمونه طرح غیرفعال برای تست.',
-        'duration_months' => 6, 'price' => 1800000, 'discount_price' => null,
-        'is_free' => false, 'is_one_time' => false, 'is_active' => false, 'sort_order' => 6,
-        'features' => ['دسترسی به همه پکیج‌های پلن', 'پشتیبانی اولویت‌دار'],
+        'name' => 'اشتراک ویژه سالانه', 'slug' => 'vip-yearly', 'duration' => 12, 'price' => 4800000, 'discount' => 1300000,
+        'one_time' => false, 'active' => true, 'order' => 3,
+        'description' => 'کامل‌ترین طرح: یک سال، همه پکیج‌ها یک‌ماه رایگان + پشتیبانی اختصاصی.',
+        'features' => ['پشتیبانی اختصاصی ۲۴ ساعته', 'نصب و راه‌اندازی کامل', 'بهینه‌سازی کارایی سالانه', 'تمدید رایگان لایسنس‌ها', 'دسترسی زودهنگام به نسخه‌های بتا'],
     ],
 ];
 
-$subPlans = collect($planData)->map(function ($p) {
-    return SubscriptionPlan::updateOrCreate(['name' => $p['name']], $p);
+$plans = collect($planData)->map(function ($p) {
+    return SubscriptionPlan::updateOrCreate(['slug' => $p['slug']], [
+        'name'            => $p['name'],
+        'description'     => $p['description'],
+        'duration_months' => $p['duration'],
+        'price'           => $p['price'],
+        'discount_price'  => $p['discount'],
+        'is_one_time'     => $p['one_time'],
+        'is_active'       => $p['active'],
+        'sort_order'      => $p['order'],
+        'features'        => $p['features'],
+    ]);
 });
 
-// پکیج‌های هر طرح:
-//  - پلن رایگان: ۲ پکیج منتخب با مدت اختصاصی ۱ ماهه
-//  - پلن‌های پولی: همه پکیج‌های فعال با مدت پیش‌فرض طرح
-//  - پلن دائمی: همه پکیج‌ها با مدت اختصاصی ۰ (نامحدود)
-$freePlan = $subPlans->firstWhere('name', 'پلن رایگان شروع');
-$freePlan->packages()->syncWithPivotValues($packages->take(2)->pluck('id')->all(), ['duration_months' => 1]);
-
-$permanentPlan = $subPlans->firstWhere('name', 'پلن دائمی ویژه');
-$permanentPlan->packages()->syncWithPivotValues($packages->pluck('id')->all(), ['duration_months' => 0]);
-
-foreach ($subPlans->whereNotIn('name', ['پلن رایگان شروع', 'پلن دائمی ویژه']) as $p) {
-    $p->packages()->sync($packages->pluck('id')->all()); // مدت پیش‌فرض طرح
+// پکیج‌های همراه هر طرح (free_months)
+$planPackages = [
+    'basic-monthly'   => [['kavenegar-sms', 1]],
+    'pro-quarterly'   => [['kavenegar-sms', 3], ['seo-pro', 2], ['modern-shop-theme', 0]],
+    'vip-yearly'      => [['behpardakht-gateway', 1], ['kavenegar-sms', 1], ['seo-pro', 1], ['modern-shop-theme', 0]],
+];
+$slugToId = $packages->pluck('id', 'slug');
+foreach ($planPackages as $planSlug => $rows) {
+    $plan = $plans->firstWhere('slug', $planSlug);
+    $sync = [];
+    foreach ($rows as [$pkgSlug, $months]) {
+        if ($slugToId->has($pkgSlug)) {
+            $sync[$slugToId[$pkgSlug]] = ['free_months' => $months];
+        }
+    }
+    $plan->packages()->sync($sync);
 }
 
-// ---------- subscription requests (درخواست‌های اشتراک) ----------
-// ۱) درخواست پرداخت‌شده در انتظار تأیید مدیر
-$monthly = $subPlans->firstWhere('name', 'پلن یک‌ماهه');
-SubscriptionRequest::updateOrCreate(['customer_id' => $customers[1]->id, 'subscription_plan_id' => $monthly->id], [
-    'gateway' => 'local', 'amount' => $monthly->final_price,
-    'transaction_id' => 'SUBTRX' . strtoupper(Str::random(8)),
-    'payment_status' => 'paid', 'status' => 'pending',
-    'paid_at' => now()->subDays(1), 'created_at' => now()->subDays(1),
+// ---------- subscription orders (درخواست‌ها برای دموی پنل) ----------
+// ۱) سفارش پرداخت‌شده در انتظار تأیید مدیر (مریم حسینی → حرفه‌ای)
+$proPlan = $plans->firstWhere('slug', 'pro-quarterly');
+$pendingCustomer = $customers[1];
+$pendingOrder = SubscriptionOrder::updateOrCreate(['customer_id' => $pendingCustomer->id, 'subscription_plan_id' => $proPlan->id, 'status' => 'paid'], [
+    'amount'       => $proPlan->price,
+    'discount'     => $proPlan->discount_price,
+    'final_amount' => $proPlan->final_price,
+    'gateway'      => 'local',
+    'transaction_id' => 'TRXSUB' . strtoupper(Str::random(6)),
+    'status'       => 'paid',
+    'admin_status' => 'pending',
+    'paid_at'      => now()->subHours(3),
+    'meta'         => ['plan' => [
+        'name' => $proPlan->name, 'slug' => $proPlan->slug, 'duration_months' => $proPlan->duration_months,
+        'features' => $proPlan->features, 'price' => $proPlan->price, 'final_price' => $proPlan->final_price, 'is_one_time' => $proPlan->is_one_time,
+        'packages' => $proPlan->packages()->get(['packages.id', 'packages.name', 'packages.slug'])->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'slug' => $p->slug, 'free_months' => (int) $p->pivot->free_months])->values()->all(),
+    ]],
 ]);
 
-// ۲) درخواست رایگان در انتظار تأیید
-$freeReqCustomer = $customers[2];
-SubscriptionRequest::updateOrCreate(['customer_id' => $freeReqCustomer->id, 'subscription_plan_id' => $freePlan->id], [
-    'gateway' => null, 'amount' => 0,
-    'payment_status' => 'free', 'status' => 'pending',
-    'created_at' => now()->subDays(2),
+// ۲) سفارش رایگان (پایه) تأییدشده + اشتراک فعال + لایسنس پکیج همراه
+$basicPlan = $plans->firstWhere('slug', 'basic-monthly');
+$freeCustomer = $customers[0]; // علی رضایی
+$approvedOrder = SubscriptionOrder::updateOrCreate(['customer_id' => $freeCustomer->id, 'subscription_plan_id' => $basicPlan->id, 'status' => 'paid'], [
+    'amount'       => 0,
+    'discount'     => 0,
+    'final_amount' => 0,
+    'status'       => 'paid',
+    'admin_status' => 'approved',
+    'paid_at'      => now()->subDays(5),
+    'approved_at'  => now()->subDays(4),
+    'starts_at'    => now()->subDays(4),
+    'expires_at'   => now()->subDays(4)->addMonth(),
+    'meta'         => ['plan' => [
+        'name' => $basicPlan->name, 'slug' => $basicPlan->slug, 'duration_months' => $basicPlan->duration_months,
+        'features' => $basicPlan->features, 'price' => 0, 'final_price' => 0, 'is_one_time' => $basicPlan->is_one_time,
+        'packages' => $basicPlan->packages()->get(['packages.id', 'packages.name', 'packages.slug'])->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'slug' => $p->slug, 'free_months' => (int) $p->pivot->free_months])->values()->all(),
+    ]],
 ]);
+$approvedSubscription = Subscription::updateOrCreate(['subscription_order_id' => $approvedOrder->id], [
+    'customer_id'          => $freeCustomer->id,
+    'project_id'           => null,
+    'subscription_plan_id' => $basicPlan->id,
+    'start_date'           => now()->subDays(4)->toDateString(),
+    'end_date'             => now()->subDays(4)->addMonth()->toDateString(),
+    'expires_at'           => now()->subDays(4)->addMonth(),
+    'status'               => 'active',
+    'price'                => 0,
+    'discount'             => 0,
+    'final_amount'         => 0,
+    'payment_status'       => 'paid',
+    'description'          => 'اشتراک «پایه» — فعال‌شده پس از تأیید مدیر.',
+]);
+$approvedOrder->update(['subscription_id' => $approvedSubscription->id]);
 
-// ۳) درخواست ردشده
-$rejectedCustomer = $customers[3];
-$annual = $subPlans->firstWhere('name', 'پلن یک‌ساله حرفه‌ای');
-SubscriptionRequest::updateOrCreate(['customer_id' => $rejectedCustomer->id, 'subscription_plan_id' => $annual->id], [
-    'gateway' => 'zarinpal', 'amount' => $annual->final_price,
-    'transaction_id' => 'SUBTRX' . strtoupper(Str::random(8)),
-    'payment_status' => 'paid', 'status' => 'rejected',
-    'paid_at' => now()->subDays(9), 'approved_at' => null, 'rejected_at' => now()->subDays(8),
-    'admin_note' => 'اطلاعات پرداخت قابل تأیید نبود؛ لطفاً با پشتیبانی تماس بگیرید.',
-    'created_at' => now()->subDays(9),
-]);
+// لایسنسِ دسترسی رایگان صادرشده از طریق اشتراک تأییدشده (علی + kavenegar-sms یک‌ماه)
+$grantPkg = $packages->firstWhere('slug', 'kavenegar-sms');
+if ($grantPkg) {
+    PackageLicense::updateOrCreate([
+        'customer_id' => $freeCustomer->id,
+        'package_id'  => $grantPkg->id,
+        'notes'       => 'دسترسی رایگان از طریق اشتراک «' . $basicPlan->name . '».',
+    ], [
+        'license_key'     => 'LIC-' . strtoupper(Str::random(4)) . '-' . strtoupper(Str::random(4)) . '-SUB1',
+        'status'          => 'active',
+        'starts_at'       => now()->subDays(4),
+        'expires_at'      => now()->subDays(4)->addMonth(),
+        'duration_months' => 1,
+        'notes'           => 'دسترسی رایگان از طریق اشتراک «' . $basicPlan->name . '».',
+    ]);
+}
 
 echo "Demo data seeded OK\n";
 echo 'Projects: ' . Project::count() . ' | Packages: ' . Package::count() . ' | Versions: ' . PackageVersion::count()
     . ' | Plans: ' . PackagePricingPlan::count() . ' | Customers: ' . Customer::count()
     . ' | Licenses: ' . PackageLicense::count() . ' | Purchases: ' . PackagePurchase::count()
     . ' | Subscriptions: ' . Subscription::count() . ' | Updates: ' . Update::count()
-    . ' | SubPlans: ' . SubscriptionPlan::count() . ' | SubRequests: ' . SubscriptionRequest::count() . "\n";
+    . ' | SubPlans: ' . SubscriptionPlan::count() . ' | SubOrders: ' . SubscriptionOrder::count() . "\n";

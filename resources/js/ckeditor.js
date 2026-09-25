@@ -82,8 +82,7 @@ document.addEventListener('alpine:init', () => {
                 contentsLangDirection: 'rtl',
                 height: 300,
                 entities: false,
-                /* Keep raw HTML (typed in Source mode) intact instead of
-                   stripping tags/attributes on wysiwyg⇄source round-trips */
+                /* حفظ HTML خام (کلاس/data-attr) در رفت‌وبرگشت Source ↔ WYSIWYG */
                 allowedContent: true,
                 toolbar: [
                     { name: 'clipboard', items: ['Cut', 'Copy', 'Paste', 'PasteText', 'PasteFromWord', '-', 'Undo', 'Redo'] },
@@ -101,21 +100,19 @@ document.addEventListener('alpine:init', () => {
             this.instance.setData(textarea.value || '');
             this.instance.on('change', () => this.sync());
 
-            /* ⭐ CKEditor 4 does NOT fire the "change" event while editing
-               in Source mode (sourcearea) — typing raw HTML there never
-               reached the Livewire model and arrived EMPTY on the server.
-               Fix: watch mode switches; when Source opens, bind directly to
-               the underlying .cke_source textarea; when switching back to
-               WYSIWYG, force one final sync. */
+            /* FIX (ذخیره نشدن HTML در حالت Source): پلاگین sourcearea رویداد change
+               نمی‌دهد → textarea مخفی wire:model هرگز آپدیت نمی‌شد. با شنونده mode،
+               هنگام ورود به Source، input/change/blur مستقیم به textarea.cke_source
+               وصل می‌شوند (idempotent با dataset.ckSynced) و هنگام بازگشت به WYSIWYG
+               هم یک sync اجباری انجام می‌شود. */
             this.instance.on('mode', () => {
-                if (!this.instance) return;
                 if (this.instance.mode === 'source') {
                     this.attachSourceSync();
                 } else {
                     this.sync();
                 }
             });
-            this.attachSourceSync();
+            if (this.instance.mode === 'source') this.attachSourceSync();
 
             /* server → editor sync (openEdit/openCreate morph the marker div
                OUTSIDE wire:ignore). Livewire 3 has no DOM "livewire:morphed"
@@ -138,28 +135,26 @@ document.addEventListener('alpine:init', () => {
             return document.querySelector(`[data-editor-model="${model}"][data-editor-value]`);
         },
 
-        /* Bind input/blur listeners on CKEditor 4's Source-mode textarea
-           (.cke_source) so every keystroke/paste syncs to the Livewire
-           property — the editor's own "change" event stays silent there. */
+        /* connect the raw source <textarea class="cke_source"> to sync() —
+           entered every time the editor switches to Source mode (a fresh
+           textarea is created each time, so dataset guard = idempotent). */
         attachSourceSync() {
-            setTimeout(() => {
-                if (!this.instance || this.instance.mode !== 'source') return;
-                const shell = this.$el;
-                const source =
-                    shell?.querySelector('textarea.cke_source') ||
-                    this.instance?.container?.$?.querySelector?.('textarea.cke_source');
-                if (!source || source.dataset.ckSynced) return;
-                source.dataset.ckSynced = '1';
-                for (const ev of ['input', 'change', 'blur']) {
-                    source.addEventListener(ev, () => this.sync());
-                }
-            }, 0);
+            if (!this.instance) return;
+            const holder = this.instance.container && this.instance.container.$;
+            const source = holder && holder.querySelector ? holder.querySelector('textarea.cke_source') : null;
+            if (!source || source.dataset.ckSynced) return;
+            source.dataset.ckSynced = '1';
+            const flush = () => this.sync();
+            source.addEventListener('input', flush);
+            source.addEventListener('change', flush);
+            source.addEventListener('blur', flush);
         },
 
         /* editor → Livewire property (textarea + input event for wire:model) */
         sync() {
             if (this.syncing || !this.instance) return;
             const textarea = this.$refs.target;
+            if (!textarea || !textarea.isConnected) return;
             textarea.value = this.instance.getData();
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
         },

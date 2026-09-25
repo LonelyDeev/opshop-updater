@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Purchases;
 
+use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\PackagePurchase;
 use Livewire\Attributes\Computed;
@@ -15,7 +16,7 @@ use Livewire\WithPagination;
 #[Title('خریدها')]
 class Index extends Component
 {
-    use WithPagination, WithToasts;
+    use WithPagination, WithToasts, WithBulkActions;
 
     #[Url]
     public string $search = '';
@@ -23,18 +24,12 @@ class Index extends Component
     #[Url]
     public string $status = '';
 
-    /** مرتب‌سازی — پیش‌فرض همان ترتیب قبلی صفحه (جدیدترین) است */
+    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، مبلغ، تاریخ پرداخت و… */
     #[Url]
     public string $sort = 'newest';
 
+    /** آی‌دی خرید برای حذف تکی */
     public ?int $deleteId = null;
-
-    /** @var array<int,int> */
-    public array $selected = [];
-
-    public bool $selectAll = false;
-
-    public bool $showBulkModal = false;
 
     public function updatedSearch(): void
     {
@@ -64,9 +59,44 @@ class Index extends Component
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->sort === 'newest', fn ($q) => $q->latest())
             ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
+            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
+            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
             ->when($this->sort === 'amount_desc', fn ($q) => $q->orderByDesc('amount'))
             ->when($this->sort === 'amount_asc', fn ($q) => $q->orderBy('amount'))
+            ->when($this->sort === 'paid_newest', fn ($q) => $q->orderByDesc('paid_at'))
+            ->when($this->sort === 'paid_oldest', fn ($q) => $q->orderByRaw('paid_at is null')->orderBy('paid_at'))
             ->paginate(12);
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  Bulk selection + delete (WithBulkActions)                        */
+    /* ---------------------------------------------------------------- */
+
+    public function bulkPageIds(): array
+    {
+        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    public function deleteSelectedRecords(): void
+    {
+        $ids = array_map('intval', $this->selectedIds);
+
+        // حذف خرید امن است: لایسنس‌های مرتبط با purchase_id=null باقی می‌مانند (nullOnDelete)
+        $count = PackagePurchase::query()->whereIn('id', $ids)->delete();
+
+        $this->toast(fa_num($count) . ' خرید حذف شد.');
+    }
+
+    /** حذف تکی خرید */
+    public function delete(): void
+    {
+        $purchase = PackagePurchase::findOrFail($this->deleteId ?? 0);
+
+        $id = $purchase->id;
+        $purchase->delete();
+
+        $this->deleteId = null;
+        $this->toast('خرید #' . fa_num($id) . ' حذف شد.');
     }
 
     #[Computed]
@@ -77,73 +107,6 @@ class Index extends Component
             'pending' => PackagePurchase::where('status', PackagePurchase::STATUS_PENDING)->count(),
             'failed'  => PackagePurchase::where('status', PackagePurchase::STATUS_FAILED)->count(),
         ];
-    }
-
-    /* ---------------------------------------------------------------- */
-    /*  حذف تکی / چندتایی (سوابق مالی)                                   */
-    /* ---------------------------------------------------------------- */
-
-    public function delete(): void
-    {
-        $purchase = PackagePurchase::findOrFail($this->deleteId ?? 0);
-
-        $purchase->delete();
-        $this->deleteId = null;
-        $this->toast('سابقه خرید حذف شد.');
-    }
-
-    public function updatedSelectAll(bool $value): void
-    {
-        $ids = $this->records()->pluck('id')->all();
-
-        $this->selected = $value
-            ? array_values(array_unique(array_merge($this->selected, $ids)))
-            : array_values(array_diff($this->selected, $ids));
-    }
-
-    public function toggleSelect(int $id): void
-    {
-        $this->selected = in_array($id, $this->selected)
-            ? array_values(array_diff($this->selected, [$id]))
-            : array_values(array_merge($this->selected, [$id]));
-
-        // همگام‌سازی چک‌باکس سربرگ با وضعیت صفحه فعلی
-        $pageIds = $this->records()->pluck('id')->all();
-        $this->selectAll = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
-    }
-
-    public function clearSelection(): void
-    {
-        $this->selected = [];
-        $this->selectAll = false;
-    }
-
-    public function confirmBulkDelete(): void
-    {
-        if (empty($this->selected)) {
-            return;
-        }
-
-        $this->showBulkModal = true;
-    }
-
-    public function bulkDelete(): void
-    {
-        if (empty($this->selected)) {
-            $this->showBulkModal = false;
-
-            return;
-        }
-
-        $count = 0;
-        foreach (PackagePurchase::whereIn('id', $this->selected)->get() as $purchase) {
-            $purchase->delete();
-            $count++;
-        }
-
-        $this->clearSelection();
-        $this->showBulkModal = false;
-        $this->toast(fa_num($count) . ' سابقه خرید انتخاب‌شده حذف شد.');
     }
 
     public function render()

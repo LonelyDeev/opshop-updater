@@ -8,6 +8,10 @@
             <div class="shop-hero-glow absolute -bottom-40 -end-24 size-96 rounded-full opacity-60 blur-3xl"></div>
         </div>
 
+        {{-- grid pattern --}}
+        <div class="pointer-events-none absolute inset-0 opacity-[0.04]" aria-hidden="true"
+             style="background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 44px 44px;"></div>
+
         <div class="relative mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-16">
             <div class="max-w-2xl animate-slide-up">
                 <span class="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-teal-100 ring-1 ring-white/20">
@@ -19,6 +23,7 @@
                 </h1>
                 <p class="mt-3 max-w-xl text-sm leading-7 text-teal-50/80 sm:text-base">
                     پکیج‌های آماده را تهیه کنید و با «کد آپدیت» پنل مشتری، بدون نیاز به ثبت‌نام، مستقیماً خرید و دانلود کنید.
+                    برای دسترسی‌های ویژه هم سراغ <a href="{{ route('shop.subscriptions') }}" wire:navigate class="font-bold text-teal-100 underline decoration-teal-100/40 underline-offset-4 transition-colors hover:decoration-teal-100">طرح‌های اشتراک</a> بروید.
                 </p>
 
                 {{-- search --}}
@@ -30,39 +35,86 @@
         </div>
     </section>
 
-    {{-- ============ Subscription plans CTA ============ --}}
-    <section class="mx-auto w-full max-w-7xl px-4 sm:px-6">
-        <a href="{{ route('shop.plans') }}" wire:navigate
-           class="shop-hero group relative flex items-center gap-4 overflow-hidden rounded-2xl p-5 shadow-card ring-1 ring-white/10 transition-all hover:shadow-card-lg sm:p-6">
-            {{-- decorative glow --}}
-            <div class="pointer-events-none absolute inset-0" aria-hidden="true">
-                <div class="shop-hero-glow absolute -top-24 -end-16 size-64 rounded-full opacity-40 blur-3xl"></div>
-            </div>
-
-            <span class="relative flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-white ring-1 ring-white/25">
-                <x-icon name="crown" class="size-6" />
-            </span>
-
-            <div class="relative min-w-0 flex-1">
-                <p class="text-sm font-black text-white sm:text-base">طرح‌های اشتراک</p>
-                <p class="mt-0.5 text-xs leading-5 text-teal-50/80">
-                    دسترسی به چندین پکیج با یک خرید — طرح‌های ماهانه تا دائمی با لایسنس اختصاصی
-                </p>
-            </div>
-
-            <span class="relative hidden items-center gap-1.5 rounded-xl bg-white/15 px-3.5 py-2 text-xs font-bold text-white ring-1 ring-white/20 transition-colors group-hover:bg-white/25 sm:inline-flex">
-                مشاهده طرح‌ها
-                <x-icon name="arrow-left" class="size-3.5 transition-transform group-hover:-translate-x-1" />
-            </span>
-        </a>
-    </section>
-
     {{-- ============ Stats ============ --}}
     <section class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-center gap-4 px-4 sm:justify-start sm:px-6">
         <x-stat label="پکیج فعال" :value="fa_num($this->stats['packages'])" icon="package" variant="primary" />
         <x-stat label="نسخه فعال" :value="fa_num($this->stats['versions'])" icon="layers" variant="info" />
-        <x-stat label="پرداخت امن" value="درگاه‌های بانکی" icon="shield-check" variant="warning" />
+        <x-stat label="طرح اشتراک فعال" :value="fa_num($this->stats['plans'])" icon="crown" variant="warning" />
+        <x-stat label="خرید موفق" :value="fa_num($this->stats['customers'])" icon="check-circle" variant="neutral" />
     </section>
+
+    {{-- ============ Subscription plans teaser ============ --}}
+    @if($this->featuredPlans->count())
+        <section class="mx-auto w-full max-w-7xl px-4 sm:px-6">
+            <div class="relative overflow-hidden rounded-3xl bg-gradient-to-bl from-brand-50 via-white to-teal-50 ring-1 ring-brand-100 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800 dark:ring-zinc-800">
+                <div class="shop-hero-glow pointer-events-none absolute -top-24 -start-24 size-72 rounded-full opacity-30 blur-3xl" aria-hidden="true"></div>
+
+                <div class="relative p-6 sm:p-8">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 class="flex items-center gap-2 text-lg font-black text-zinc-900 dark:text-zinc-50">
+                                <x-icon name="crown" class="size-5 text-amber-500" />
+                                طرح‌های اشتراک ویژه
+                            </h2>
+                            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                                یک اشتراک بخرید، قابلیت‌های ویژه + پکیج‌های منتخب را رایگان داشته باشید.
+                            </p>
+                        </div>
+                        <a href="{{ route('shop.subscriptions') }}" wire:navigate>
+                            <x-btn icon="arrow-left">مشاهده همه طرح‌ها</x-btn>
+                        </a>
+                    </div>
+
+                    <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                        @foreach($this->featuredPlans as $plan)
+                            <a href="{{ route('shop.subscriptions') }}" wire:navigate
+                               class="group flex flex-col gap-3 rounded-2xl bg-white/80 p-5 ring-1 ring-zinc-200/70 backdrop-blur transition-all hover:-translate-y-1 hover:shadow-card-lg dark:bg-zinc-800/70 dark:ring-zinc-700/50">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-zinc-50">
+                                        <x-icon name="crown" class="size-4 text-amber-500" />
+                                        {{ $plan->name }}
+                                    </span>
+                                    @if($plan->final_price <= 0)
+                                        <x-badge variant="success" icon="gift">رایگان</x-badge>
+                                    @endif
+                                </div>
+                                <div class="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                                    <x-icon name="calendar-clock" class="size-3.5" />
+                                    {{ $plan->duration_label }}
+                                    @if($plan->is_one_time)
+                                        · یک‌بارمصرف
+                                    @endif
+                                </div>
+                                @if($plan->packages->count())
+                                    <div class="flex flex-wrap gap-1.5">
+                                        @foreach($plan->packages->take(3) as $pkg)
+                                            <span class="rounded-lg bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
+                                                {{ \Illuminate\Support\Str::limit($pkg->name, 16) }}
+                                            </span>
+                                        @endforeach
+                                        @if($plan->packages->count() > 3)
+                                            <span class="rounded-lg bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+                                                +{{ fa_num($plan->packages->count() - 3) }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                @endif
+                                <div class="mt-auto flex items-center justify-between border-t border-zinc-100 pt-3 dark:border-zinc-700/50">
+                                    <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-zinc-50">
+                                        {{ $plan->final_price > 0 ? money($plan->final_price) : 'رایگان' }}
+                                    </span>
+                                    <span class="inline-flex items-center gap-1 text-xs font-bold text-brand-600 transition-colors group-hover:text-brand-500 dark:text-brand-400">
+                                        جزئیات طرح
+                                        <x-icon name="arrow-left" class="size-3.5 transition-transform group-hover:-translate-x-1" />
+                                    </span>
+                                </div>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        </section>
+    @endif
 
     {{-- ============ Filters + grid ============ --}}
     <section class="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6">

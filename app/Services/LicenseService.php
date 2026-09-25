@@ -8,7 +8,6 @@ use App\Models\PackageLicense;
 use App\Models\PackagePricingPlan;
 use App\Models\PackagePurchase;
 use App\Models\PackageVersion;
-use App\Models\SubscriptionRequest;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -162,86 +161,5 @@ class LicenseService
 
         Log::info("Expired {$count} licenses");
         return $count;
-    }
-
-    /* ===================================================================
-     *  اشتراک‌ها (Subscription Plans)
-     * =================================================================== */
-
-    /**
-     * صدور یا تمدید لایسنس برای یک پکیجِ داخل طرح اشتراک (پس از تأیید مدیر):
-     *
-     *  - اگر مشتری برای این پکیج لایسنس فعال/منقضی داشته باشد → تمدید
-     *    (انقضا جدید = انقضای فعلی + مدت طرح؛ لایسنس قبلی revoked می‌شود)
-     *  - در غیر این صورت → لایسنس جدید با مدت طرح
-     *  - duration = 0 → لایسنس نامحدود
-     *
-     * @param  int|null  $durationMonths  مدت (ماه)؛ null = مدت پیش‌فرض طرح
-     */
-    public function issueOrRenewForSubscription(
-        Customer $customer,
-        Package $package,
-        ?int $durationMonths,
-        SubscriptionRequest $request
-    ): PackageLicense {
-        $duration = (int) ($durationMonths ?? $request->plan->duration_months);
-
-        $oldLicense = PackageLicense::query()
-            ->where('package_id', $package->id)
-            ->where('customer_id', $customer->id)
-            ->whereIn('status', [PackageLicense::STATUS_ACTIVE, PackageLicense::STATUS_EXPIRED])
-            ->latest('id')
-            ->first();
-
-        if ($oldLicense && $oldLicense->isActive()) {
-            return $this->renewForSubscription($oldLicense, $duration, $request);
-        }
-
-        return $this->issueForSubscription($customer, $package, $duration, $request);
-    }
-
-    private function issueForSubscription(
-        Customer $customer,
-        Package $package,
-        int $duration,
-        SubscriptionRequest $request
-    ): PackageLicense {
-        return PackageLicense::create([
-            'license_key'              => PackageLicense::generateKey(),
-            'package_id'               => $package->id,
-            'customer_id'              => $customer->id,
-            'subscription_request_id'  => $request->id,
-            'status'                   => PackageLicense::STATUS_ACTIVE,
-            'starts_at'                => now(),
-            'expires_at'               => $duration > 0 ? Carbon::now()->addMonths($duration) : null,
-            'duration_months'          => $duration,
-            'notes'                    => "صدور از طریق طرح اشتراک «{$request->plan->name}»",
-        ]);
-    }
-
-    private function renewForSubscription(
-        PackageLicense $oldLicense,
-        int $duration,
-        SubscriptionRequest $request
-    ): PackageLicense {
-        $license = PackageLicense::create([
-            'license_key'              => PackageLicense::generateKey(),
-            'package_id'               => $oldLicense->package_id,
-            'customer_id'              => $oldLicense->customer_id,
-            'subscription_request_id'  => $request->id,
-            'renewed_from'             => $oldLicense->id,
-            'status'                   => PackageLicense::STATUS_ACTIVE,
-            'starts_at'                => $oldLicense->starts_at ?? now(),
-            // تمدید از انقضای فعلی؛ مدت ۰ = نامحدود
-            'expires_at'               => $duration > 0
-                ? (clone ($oldLicense->expires_at ?? now()))->addMonths($duration)
-                : null,
-            'duration_months'          => $duration,
-            'notes'                    => "تمدید از طریق طرح اشتراک «{$request->plan->name}»",
-        ]);
-
-        $oldLicense->update(['status' => PackageLicense::STATUS_REVOKED]);
-
-        return $license;
     }
 }

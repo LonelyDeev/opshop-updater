@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Licenses;
 
+use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Package;
 use App\Models\PackageLicense;
@@ -17,7 +18,7 @@ use Livewire\WithPagination;
 #[Title('لایسنس‌ها')]
 class Index extends Component
 {
-    use WithPagination, WithToasts;
+    use WithPagination, WithToasts, WithBulkActions;
 
     #[Url]
     public string $search = '';
@@ -28,20 +29,14 @@ class Index extends Component
     #[Url]
     public string $package_id = '';
 
-    /** مرتب‌سازی — پیش‌فرض همان ترتیب قبلی صفحه (نزدیک‌ترین انقضا) است */
+    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، تاریخ انقضا و… */
     #[Url]
-    public string $sort = 'expiry_soonest';
+    public string $sort = 'newest';
 
     public ?int $revokeId = null;
 
+    /** آی‌دی لایسنس برای حذف تکی */
     public ?int $deleteId = null;
-
-    /** @var array<int,int> */
-    public array $selected = [];
-
-    public bool $selectAll = false;
-
-    public bool $showBulkModal = false;
 
     public function updatedSearch(): void
     {
@@ -79,8 +74,8 @@ class Index extends Component
             ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
             ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
             ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
-            ->when($this->sort === 'expiry_soonest', fn ($q) => $q->orderByRaw('expires_at is null')->orderBy('expires_at'))
-            ->when($this->sort === 'expiry_latest', fn ($q) => $q->orderByRaw('expires_at is null desc')->orderByDesc('expires_at'))
+            ->when($this->sort === 'expires_soon', fn ($q) => $q->orderByRaw('expires_at is null')->orderBy('expires_at'))
+            ->when($this->sort === 'expires_late', fn ($q) => $q->orderByRaw('expires_at is null')->orderByDesc('expires_at'))
             ->paginate(12);
     }
 
@@ -88,6 +83,27 @@ class Index extends Component
     public function packages()
     {
         return Package::query()->orderBy('name')->get(['id', 'name']);
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  Bulk selection (WithBulkActions)                                 */
+    /* ---------------------------------------------------------------- */
+
+    public function bulkPageIds(): array
+    {
+        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    public function deleteSelectedRecords(): void
+    {
+        $ids = array_map('intval', $this->selectedIds);
+
+        // توکن‌های دانلود مرتبط (FK cascade نیست در برخی ست‌آپ‌ها → دستی برای اطمینان)
+        \App\Models\PackageDownloadToken::whereIn('license_id', $ids)->delete();
+
+        $count = PackageLicense::query()->whereIn('id', $ids)->delete();
+
+        $this->toast(fa_num($count) . ' لایسنس حذف شد.');
     }
 
     /* ---------------------------------------------------------------- */
@@ -113,78 +129,25 @@ class Index extends Component
         $this->toast('لایسنس فعال شد.');
     }
 
+    /** حذف تکی لایسنس */
+    public function delete(): void
+    {
+        $license = PackageLicense::findOrFail($this->deleteId ?? 0);
+
+        \App\Models\PackageDownloadToken::where('license_id', $license->id)->delete();
+
+        $key = $license->license_key;
+        $license->delete();
+
+        $this->deleteId = null;
+        $this->toast("لایسنس «{$key}» حذف شد.");
+    }
+
     public function expireOld(): void
     {
         $count = app(LicenseService::class)->expireOldLicenses();
 
         $this->toast(fa_num($count) . ' لایسنس منقضی به‌روزرسانی شد.');
-    }
-
-    /* ---------------------------------------------------------------- */
-    /*  حذف تکی / چندتایی                                               */
-    /* ---------------------------------------------------------------- */
-
-    public function delete(): void
-    {
-        $license = PackageLicense::findOrFail($this->deleteId ?? 0);
-
-        $license->delete();
-        $this->deleteId = null;
-        $this->toast('لایسنس حذف شد.');
-    }
-
-    public function updatedSelectAll(bool $value): void
-    {
-        $ids = $this->records()->pluck('id')->all();
-
-        $this->selected = $value
-            ? array_values(array_unique(array_merge($this->selected, $ids)))
-            : array_values(array_diff($this->selected, $ids));
-    }
-
-    public function toggleSelect(int $id): void
-    {
-        $this->selected = in_array($id, $this->selected)
-            ? array_values(array_diff($this->selected, [$id]))
-            : array_values(array_merge($this->selected, [$id]));
-
-        // همگام‌سازی چک‌باکس سربرگ با وضعیت صفحه فعلی
-        $pageIds = $this->records()->pluck('id')->all();
-        $this->selectAll = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
-    }
-
-    public function clearSelection(): void
-    {
-        $this->selected = [];
-        $this->selectAll = false;
-    }
-
-    public function confirmBulkDelete(): void
-    {
-        if (empty($this->selected)) {
-            return;
-        }
-
-        $this->showBulkModal = true;
-    }
-
-    public function bulkDelete(): void
-    {
-        if (empty($this->selected)) {
-            $this->showBulkModal = false;
-
-            return;
-        }
-
-        $count = 0;
-        foreach (PackageLicense::whereIn('id', $this->selected)->get() as $license) {
-            $license->delete();
-            $count++;
-        }
-
-        $this->clearSelection();
-        $this->showBulkModal = false;
-        $this->toast(fa_num($count) . ' لایسنس انتخاب‌شده حذف شد.');
     }
 
     public function render()

@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Storage;
 
 class Package extends Model
@@ -73,14 +72,6 @@ class Package extends Model
     public function licenses(): HasMany
     {
         return $this->hasMany(PackageLicense::class);
-    }
-
-    /** طرح‌های اشتراکی که این پکیج در آن‌ها قرار دارد */
-    public function subscriptionPlans(): BelongsToMany
-    {
-        return $this->belongsToMany(SubscriptionPlan::class, 'subscription_plan_package')
-            ->withPivot('duration_months')
-            ->withTimestamps();
     }
 
     public function images(): HasMany

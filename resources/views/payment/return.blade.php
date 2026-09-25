@@ -276,24 +276,17 @@
 
         {{-- ============ جزئیات تراکنش ============ --}}
         <section class="details" aria-label="جزئیات تراکنش">
-            @if ($isSubscription)
+            @if ($purchase->package?->name)
                 <div class="row">
-                    <span class="k">طرح اشتراک</span>
-                    <span class="v">{{ $purchase->plan?->name }}</span>
+                    <span class="k">پکیج</span>
+                    <span class="v">{{ $purchase->package->name }}</span>
                 </div>
-            @else
-                @if ($purchase->package?->name)
-                    <div class="row">
-                        <span class="k">پکیج</span>
-                        <span class="v">{{ $purchase->package->name }}</span>
-                    </div>
-                @endif
-                @if ($purchase->pricingPlan?->name)
-                    <div class="row">
-                        <span class="k">طرح</span>
-                        <span class="v">{{ $purchase->pricingPlan->name }}</span>
-                    </div>
-                @endif
+            @endif
+            @if ($purchase->pricingPlan?->name)
+                <div class="row">
+                    <span class="k">طرح</span>
+                    <span class="v">{{ $purchase->pricingPlan->name }}</span>
+                </div>
             @endif
             @if ($gatewayName)
                 <div class="row">
@@ -317,7 +310,7 @@
                 <span class="k">مبلغ</span>
                 <span class="v">{{ fa_num(money($purchase->amount)) }}</span>
             </div>
-            @if (! $isSubscription && $status === \App\Models\PackagePurchase::STATUS_PAID && $purchase->license?->license_key)
+            @if ($status === \App\Models\PackagePurchase::STATUS_PAID && $purchase->license?->license_key)
                 <div class="row">
                     <span class="k">لایسنس</span>
                     <span class="v mono">

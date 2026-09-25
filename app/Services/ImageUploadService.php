@@ -32,13 +32,22 @@ class ImageUploadService
         // مسیر کامل در پوشه public
         $destinationPath = public_path(self::THUMBNAIL_DIR);
 
-        // ذخیره امن فایل در پوشه public
-        // (move_uploaded_file روی فایل موقت Livewire کار نمی‌کند — فایل در درخواست
-        //  قبلی آپلود شده است؛ بنابراین از rename/کپی استریمی استفاده می‌کنیم)
-        $this->persistFile($file, $destinationPath, $filename);
+        // ایجاد پوشه اگر وجود ندارد
+        if (!file_exists($destinationPath)) {
+            mkdir($destinationPath, 0755, true);
+        }
+
+        // ذخیره فایل در پوشه public
+        $file->move($destinationPath, $filename);
 
         // مسیر نسبی برای ذخیره در دیتابیس
-        return self::THUMBNAIL_DIR . '/' . $filename;
+        $path = self::THUMBNAIL_DIR . '/' . $filename;
+
+        if (!$path) {
+            throw new RuntimeException('خطا در ذخیره تصویر شاخص.');
+        }
+
+        return $path;
     }
 
     /* ===================================================================
@@ -67,8 +76,11 @@ class ImageUploadService
                 $fileSize = $file->getSize(); // <-- ذخیره قبل از انتقال
 
                 $destinationPath = public_path(self::GALLERY_DIR);
+                if (!file_exists($destinationPath)) {
+                    mkdir($destinationPath, 0755, true);
+                }
 
-                $this->persistFile($file, $destinationPath, $filename);
+                $file->move($destinationPath, $filename);
                 $path = self::GALLERY_DIR . '/' . $filename;
 
                 $nextOrder++;
@@ -136,61 +148,6 @@ class ImageUploadService
                 PackageImage::where('id', $id)->update(['sort_order' => $order + 1]);
             }
         });
-    }
-
-    /* ===================================================================
-     *  ذخیره امن فایل آپلودی روی دیسک
-     *
-     *  چرا move() نه؟ فایل‌های آپلودی Livewire (TemporaryUploadedFile)
-     *  در درخواست «قبلی» آپلود شده‌اند؛ متد move() در پس‌زمینه از
-     *  move_uploaded_file() استفاده می‌کند که فقط روی فایل‌های همین
-     *  درخواست کار می‌کند و در غیر این صورت خطای
-     *  «Could not move the file … livewire-tmp …» می‌دهد.
-     *  راه‌حل: rename() معمولی + کپی استریمی به‌عنوان جایگزین
-     *  (روی ویندوز/هاست‌هایی که rename را قفل می‌کنند).
-     * =================================================================== */
-    private function persistFile(UploadedFile $file, string $destinationDir, string $filename): void
-    {
-        // ایجاد پوشه مقصد در صورت نبود
-        if (!is_dir($destinationDir) && !@mkdir($destinationDir, 0775, true) && !is_dir($destinationDir)) {
-            throw new RuntimeException('امکان ایجاد پوشه «' . $destinationDir . '» وجود ندارد؛ دسترسی‌های پوشه public را بررسی کنید.');
-        }
-
-        $target = rtrim($destinationDir, '/\\') . DIRECTORY_SEPARATOR . $filename;
-
-        // مسیر واقعی فایل روی دیسک
-        $source = $file->getRealPath() ?: (string) $file->getPathname();
-
-        if ($source === '' || !is_file($source)) {
-            throw new RuntimeException('فایل موقت آپلود یافت نشد؛ لطفاً فایل را دوباره انتخاب و ذخیره کنید.');
-        }
-
-        // روش اول: انتقال سریع
-        $moved = @rename($source, $target);
-
-        // روش دوم: کپی استریمی + حذف مبدأ (برای ویندوز/آنتی‌ویروس/قفل rename)
-        if (!$moved) {
-            $in  = @fopen($source, 'rb');
-            $out = @fopen($target, 'wb');
-            $copied = false;
-            if ($in && $out) {
-                $copied = stream_copy_to_stream($in, $out);
-            }
-            if ($in)  { @fclose($in); }
-            if ($out) { @fclose($out); }
-            if ($copied !== false && $copied > 0) {
-                @unlink($source);
-                $moved = true;
-            } else {
-                @unlink($target);
-            }
-        }
-
-        clearstatcache(true, $target);
-
-        if (!$moved || !is_file($target) || (int) @filesize($target) === 0) {
-            throw new RuntimeException('ذخیره فایل روی دیسک ناموفق بود؛ دسترسی نوشتن در پوشه public/uploads را بررسی کنید.');
-        }
     }
 
     /* ===================================================================

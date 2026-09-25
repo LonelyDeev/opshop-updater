@@ -9,47 +9,50 @@
     </div>
 
     {{-- filters --}}
-    <div class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+    <div class="card flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
         <div class="relative flex-1">
             <x-icon name="search" class="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
             <input type="search" wire:model.live.debounce.400ms="search" placeholder="جستجوی کلید لایسنس یا نام مشتری…" class="input ps-10" />
         </div>
-        <select wire:model.live="status" class="input sm:w-40">
+        <select wire:model.live="status" class="input lg:w-40">
             <option value="">همه وضعیت‌ها</option>
             <option value="active">فعال</option>
             <option value="revoked">باطل شده</option>
             <option value="expired">منقضی</option>
         </select>
-        <select wire:model.live="package_id" class="input sm:w-48">
+        <select wire:model.live="package_id" class="input lg:w-44">
             <option value="">همه پکیج‌ها</option>
             @foreach($this->packages as $package)
                 <option value="{{ $package->id }}">{{ $package->name }}</option>
             @endforeach
         </select>
-        <select wire:model.live="sort" class="input sm:w-44" aria-label="مرتب‌سازی">
-            <option value="expiry_soonest">نزدیک‌ترین انقضا</option>
-            <option value="expiry_latest">دورترین انقضا</option>
-            <option value="newest">جدیدترین</option>
-            <option value="oldest">قدیمی‌ترین</option>
-            <option value="id_desc">شناسه (نزولی)</option>
-            <option value="id_asc">شناسه (صعودی)</option>
-        </select>
+        <div class="relative lg:w-48">
+            <x-icon name="arrow-up-down" class="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+            <select wire:model.live="sort" class="input ps-10" aria-label="ترتیب نمایش">
+                <option value="newest">جدیدترین</option>
+                <option value="oldest">قدیمی‌ترین</option>
+                <option value="id_desc">شناسه (نزولی)</option>
+                <option value="id_asc">شناسه (صعودی)</option>
+                <option value="expires_soon">نزدیک‌ترین انقضا</option>
+                <option value="expires_late">دورترین انقضا</option>
+            </select>
+        </div>
         <div wire:loading wire:target="search, status, package_id, sort" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
             <x-icon name="loader" class="size-4 animate-spin" />
             در حال فیلتر…
         </div>
     </div>
 
-    {{-- bulk selection bar --}}
-    @if(count($selected) > 0)
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-(--radius-card) bg-amber-50 p-4 ring-1 ring-amber-300/70 dark:bg-amber-500/10 dark:ring-amber-500/30">
-            <div class="flex items-center gap-2.5 text-sm font-bold text-amber-800 dark:text-amber-300">
-                <x-icon name="check-check" class="size-5 shrink-0" />
-                <span>{{ fa_num(count($selected)) }} مورد انتخاب شده</span>
+    {{-- bulk toolbar --}}
+    @if($selectedIds)
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rose-50/80 p-3 ring-1 ring-rose-200/70 dark:bg-rose-500/10 dark:ring-rose-400/20">
+            <div class="flex items-center gap-2 text-sm font-bold text-rose-700 dark:text-rose-400">
+                <x-icon name="check-square" class="size-4.5" />
+                {{ fa_num(count($selectedIds)) }} لایسنس انتخاب شده است
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <x-btn variant="ghost" icon="x" wire:click="clearSelection">لغو انتخاب</x-btn>
-                <x-btn variant="danger" icon="trash" wire:click="confirmBulkDelete">حذف انتخاب‌شده‌ها</x-btn>
+            <div class="flex items-center gap-2">
+                <x-btn variant="secondary" size="sm" wire:click="clearSelection">انصراف از انتخاب</x-btn>
+                <x-btn variant="danger" icon="trash" size="sm" wire:click="$set('confirmingBulkDelete', true)">حذف گروهی</x-btn>
             </div>
         </div>
     @endif
@@ -62,7 +65,9 @@
                     <thead>
                         <tr>
                             <th class="w-10">
-                                <input type="checkbox" wire:model.live="selectAll" class="checkbox" aria-label="انتخاب همه لایسنس‌های این صفحه">
+                                <input type="checkbox" class="checkbox" aria-label="انتخاب همه"
+                                       @if($this->allPageSelected()) checked @endif
+                                       wire:click="toggleSelectAll" />
                             </th>
                             <th>کلید لایسنس</th>
                             <th>مشتری</th>
@@ -76,8 +81,9 @@
                     <tbody>
                         @foreach($this->records as $license)
                             <tr wire:key="license-{{ $license->id }}">
-                                <td class="w-10">
-                                    <input type="checkbox" wire:click="toggleSelect({{ $license->id }})" @checked(in_array($license->id, $selected)) class="checkbox" aria-label="انتخاب لایسنس {{ $license->license_key }}">
+                                <td>
+                                    <input type="checkbox" class="checkbox" aria-label="انتخاب این لایسنس"
+                                           wire:model.live="selectedIds" value="{{ $license->id }}" />
                                 </td>
                                 <td>
                                     <div class="flex items-center gap-1.5">
@@ -161,7 +167,7 @@
                                         @endif
                                         <button type="button" wire:click="$set('deleteId', {{ $license->id }})"
                                                 class="rounded-lg p-2 text-zinc-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                                                title="حذف">
+                                                title="حذف لایسنس">
                                             <x-icon name="trash" class="size-4.5" />
                                         </button>
                                     </div>
@@ -179,45 +185,6 @@
         @endif
     </div>
 
-    {{-- delete confirm --}}
-    <x-modal wire:model="deleteId" title="حذف لایسنس" size="sm">
-        @if($deleteId)
-            @php($target = \App\Models\PackageLicense::find($deleteId))
-            <div class="space-y-4">
-                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
-                    <x-icon name="alert-triangle" class="size-6 shrink-0" />
-                    <p class="text-sm leading-6">
-                        کلید «<strong dir="ltr" class="font-mono">{{ $target?->license_key }}</strong>» برای همیشه حذف شود؟
-                        توکن‌های دانلود مرتبط با این لایسنس نیز حذف خواهند شد. این عمل قابل بازگشت نیست.
-                    </p>
-                </div>
-                <div class="flex items-center justify-end gap-2">
-                    <x-btn variant="secondary" wire:click="$set('deleteId', null)">انصراف</x-btn>
-                    <x-btn variant="danger" icon="trash" wire:click="delete" :loading="true">حذف قطعی</x-btn>
-                </div>
-            </div>
-        @endif
-    </x-modal>
-
-    {{-- bulk delete confirm --}}
-    <x-modal wire:model="showBulkModal" :title="'حذف ' . fa_num(count($selected)) . ' لایسنس'" size="sm">
-        @if(count($selected) > 0)
-            <div class="space-y-4">
-                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
-                    <x-icon name="alert-triangle" class="size-6 shrink-0" />
-                    <p class="text-sm leading-6">
-                        {{ fa_num(count($selected)) }} لایسنس انتخاب‌شده به‌همراه توکن‌های دانلود مرتبط برای همیشه حذف می‌شوند.
-                        این عمل قابل بازگشت نیست.
-                    </p>
-                </div>
-                <div class="flex items-center justify-end gap-2">
-                    <x-btn variant="secondary" wire:click="$set('showBulkModal', false)">انصراف</x-btn>
-                    <x-btn variant="danger" icon="trash" wire:click="bulkDelete" :loading="true">حذف قطعی</x-btn>
-                </div>
-            </div>
-        @endif
-    </x-modal>
-
     {{-- revoke confirm --}}
     <x-modal wire:model="revokeId" title="ابطال لایسنس" size="sm">
         @if($revokeId)
@@ -232,6 +199,45 @@
                 <div class="flex items-center justify-end gap-2">
                     <x-btn variant="secondary" wire:click="$set('revokeId', null)">انصراف</x-btn>
                     <x-btn variant="danger" icon="x-circle" wire:click="revoke" :loading="true">ابطال لایسنس</x-btn>
+                </div>
+            </div>
+        @endif
+    </x-modal>
+
+    {{-- single delete confirm --}}
+    <x-modal wire:model="deleteId" title="حذف لایسنس" size="sm">
+        @if($deleteId)
+            @php($target = \App\Models\PackageLicense::find($deleteId))
+            <div class="space-y-4">
+                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
+                    <x-icon name="trash" class="size-6 shrink-0" />
+                    <p class="text-sm leading-6">
+                        لایسنس «<strong dir="ltr" class="font-mono">{{ $target?->license_key }}</strong>» برای همیشه حذف شود؟
+                        این عمل قابل بازگشت نیست؛ سابقه‌ی خرید باقی می‌ماند اما دسترسی مشتری قطع می‌شود.
+                    </p>
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <x-btn variant="secondary" wire:click="$set('deleteId', null)">انصراف</x-btn>
+                    <x-btn variant="danger" icon="trash" wire:click="delete" :loading="true">حذف قطعی</x-btn>
+                </div>
+            </div>
+        @endif
+    </x-modal>
+
+    {{-- bulk delete confirm --}}
+    <x-modal wire:model="confirmingBulkDelete" title="حذف گروهی لایسنس‌ها" size="sm">
+        @if($confirmingBulkDelete)
+            <div class="space-y-4">
+                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
+                    <x-icon name="trash" class="size-6 shrink-0" />
+                    <p class="text-sm leading-6">
+                        <strong>{{ fa_num(count($selectedIds)) }}</strong> لایسنس انتخاب‌شده برای همیشه حذف شود؟
+                        این عمل قابل بازگشت نیست.
+                    </p>
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <x-btn variant="secondary" wire:click="clearSelection">انصراف</x-btn>
+                    <x-btn variant="danger" icon="trash" wire:click="bulkDelete" :loading="true">حذف {{ fa_num(count($selectedIds)) }} لایسنس</x-btn>
                 </div>
             </div>
         @endif

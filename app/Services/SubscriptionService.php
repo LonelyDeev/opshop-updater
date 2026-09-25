@@ -3,19 +3,21 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\Package;
+use App\Models\PackageLicense;
+use App\Models\Subscription;
+use App\Models\SubscriptionOrder;
 use App\Models\SubscriptionPlan;
-use App\Models\SubscriptionRequest;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
- * سرویس طرح‌های اشتراک:
- *
- *  - ثبت درخواست خرید طرح (پولی/رایگان) از فرانت یا API
- *  - تأیید پرداخت درخواست (بازگشت از درگاه)
- *  - تأیید مدیر → فعال‌سازی: صدور/تمدید لایسنس همه پکیج‌های طرح
- *  - رد درخواست با یادداشت مدیر
+ * منطق تجاری طرح‌های اشتراک:
+ *  - خرید طرح (رایگان/پولی از طریق درگاه)
+ *  - تأیید پرداخت
+ *  - تأیید/رد مدیر → فعال‌سازی اشتراک + صدور لایسنس رایگان پکیج‌های همراه طرح
  */
 class SubscriptionService
 {
@@ -23,163 +25,308 @@ class SubscriptionService
         private PaymentService $paymentService
     ) {}
 
+    /* ===================================================================
+     *  خرید طرح
+     * =================================================================== */
+
     /**
-     * ثبت درخواست خرید طرح
+     * ثبت سفارش اشتراک.
      *
-     * @param  string|null  $callbackUrl  برای خریدهای API (بازگشت به فروشگاه بیرونی)
-     * @return array{request: SubscriptionRequest, payment_url: ?string}
+     * @param  string|null $callbackUrl آدرس بازگشت فروشگاه مشتری (API) — در مسیر وب خالی است.
+     * @return array{order: SubscriptionOrder, payment_url?: string, transaction_id?: string, is_free?: bool, message?: string}
      *
-     * @throws RuntimeException پیام‌های فارسی برای UI
+     * @throws RuntimeException (طرح غیرفعال / یک‌بارمصرفِ استفاده‌شده / خطای درگاه)
      */
-    public function createRequest(
-        Customer $customer,
-        SubscriptionPlan $plan,
-        ?string $gateway = null,
-        ?string $callbackUrl = null
-    ): array {
+    public function purchase(Customer $customer, SubscriptionPlan $plan, ?string $gatewayKey = null, ?string $callbackUrl = null): array
+    {
         if (!$plan->is_active) {
-            throw new RuntimeException('این طرح غیرفعال است.');
+            throw new RuntimeException('این طرح اشتراک فعال نیست.');
         }
 
-        if ($plan->hasCustomerUsed($customer->id)) {
-            throw new RuntimeException(
-                'شما قبلاً از این طرح استفاده کرده‌اید. این طرح فقط یک‌بار قابل خریداری است.'
-            );
+        if ($customer->status !== 'active') {
+            throw new RuntimeException('حساب این مشتری غیرفعال است.');
         }
 
-        if ($plan->hasCustomerPending($customer->id)) {
-            throw new RuntimeException(
-                'شما یک درخواست در جریان برای این طرح دارید که در انتظار تأیید مدیر است.'
-            );
+        // گارد طرح یک‌بارمصرف: مشتری فقط یک‌بار می‌تواند از طرح استفاده کند
+        if ($plan->is_one_time && $plan->hasCustomerUsed($customer->id)) {
+            throw new RuntimeException('شما قبلاً از این طرح استفاده کرده‌اید؛ این طرح فقط یک‌بار قابل خریداری است.');
         }
 
-        if ($plan->packages()->count() === 0) {
-            throw new RuntimeException('این طرح هنوز پکیجی ندارد.');
-        }
+        $amount    = (int) $plan->price;
+        $discount  = (int) ($plan->discount_price ?? 0);
+        $final     = $plan->final_price;
 
-        $isFree = $plan->final_price <= 0;
+        // snapshot طرح در meta (برای زمانی که طرح بعداً حذف/ویرایش شود)
+        $snapshot = [
+            'plan' => [
+                'name'            => $plan->name,
+                'slug'            => $plan->slug,
+                'duration_months' => (int) $plan->duration_months,
+                'features'        => $plan->features ?? [],
+                'price'           => $amount,
+                'final_price'     => $final,
+                'is_one_time'     => (bool) $plan->is_one_time,
+                'packages'        => $plan->packages()
+                    ->get(['packages.id', 'packages.name', 'packages.slug'])
+                    ->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'slug' => $p->slug, 'free_months' => (int) $p->pivot->free_months])
+                    ->values()
+                    ->all(),
+            ],
+        ];
 
-        $request = SubscriptionRequest::create([
-            'customer_id'           => $customer->id,
-            'subscription_plan_id'  => $plan->id,
-            'amount'                => $plan->final_price,
-            'payment_status'        => $isFree ? SubscriptionRequest::PAYMENT_FREE : SubscriptionRequest::PAYMENT_PENDING,
-            'status'                => SubscriptionRequest::STATUS_PENDING,
-            'gateway'               => $isFree ? null : $gateway,
-            'callback_url'          => $callbackUrl,
+        $order = SubscriptionOrder::create([
+            'subscription_plan_id' => $plan->id,
+            'customer_id'          => $customer->id,
+            'amount'               => $amount,
+            'discount'             => $discount,
+            'final_amount'         => $final,
+            'callback_url'         => $callbackUrl,
+            'status'               => SubscriptionOrder::STATUS_PENDING,
+            'admin_status'         => SubscriptionOrder::ADMIN_STATUS_PENDING,
+            'meta'                 => $snapshot,
         ]);
 
-        // طرح رایگان → نیازی به پرداخت نیست؛ مستقیم در انتظار تأیید مدیر
-        if ($isFree) {
-            return ['request' => $request, 'payment_url' => null];
+        // ---------- مسیر رایگان: بدون درگاه، مستقیم در انتظار تأیید مدیر ----------
+        if ($final <= 0) {
+            $order->update([
+                'amount'       => 0,
+                'discount'     => 0,
+                'final_amount' => 0,
+                'status'       => SubscriptionOrder::STATUS_PAID,
+                'paid_at'      => now(),
+                'gateway'      => null,
+            ]);
+
+            return [
+                'order'    => $order,
+                'is_free'  => true,
+                'message'  => 'درخواست اشتراک رایگان ثبت شد و در انتظار تأیید مدیر است.',
+            ];
         }
 
-        // طرح پولی → ایجاد تراکنش درگاه
+        // ---------- مسیر پرداخت ----------
         try {
-            $payment = $this->paymentService->createPayment($request, $gateway);
+            $payment = $this->paymentService->createSubscriptionPayment($order, $gatewayKey);
+        } catch (\Throwable $e) {
+            // حذف رکورد یتیم pending (همان الگوی خرید پکیج)
+            $order->delete();
 
-            return ['request' => $request, 'payment_url' => $payment['payment_url']];
-        } catch (\Exception $e) {
-            // اگر درگاه تراکنش نسازد، رکورد یتیم باقی نماند
-            $request->delete();
-            throw $e;
+            throw new RuntimeException($e->getMessage(), 0, $e);
         }
+
+        return [
+            'order'          => $order,
+            'payment_url'    => $payment['payment_url'],
+            'transaction_id' => $payment['transaction_id'],
+            'amount'         => $final,
+            'gateway'        => $payment['gateway'],
+        ];
     }
 
     /**
-     * تأیید پرداخت درخواست اشتراک (پرداخت موفق → در انتظار تأیید مدیر)
-     * خودِ تایید درگاه داخل PaymentService::verifyPayment انجام می‌شود و
-     * سپس این متد فراخوانی می‌شود تا وضعیت درخواست به‌روز شود.
-     */
-    public function settlePayment(SubscriptionRequest $request, ?string $gateway = null): void
-    {
-        if ($request->isPaid()) {
-            return;
-        }
-
-        $request->markAsPaid($gateway ?? $request->gateway);
-
-        Log::info('Subscription payment verified', [
-            'request_id'     => $request->id,
-            'plan'           => $request->plan->name,
-            'customer'       => $request->customer->name,
-            'transaction_id' => $request->transaction_id,
-        ]);
-    }
-
-    /**
-     * تأیید مدیر + فعال‌سازی: برای همه پکیج‌های طرح، لایسنس صادر/تمدید می‌شود.
+     * تأیید پرداخت سفارش اشتراک (بازگشت از درگاه).
+     * توجه: صدور لایسنس/فعال‌سازی در متد approve() و پس از تأیید مدیر انجام می‌شود.
      *
-     * @return PackageLicense[] لایسنس‌های صادرشده
+     * @return array{paid: bool, order?: SubscriptionOrder, message?: string}
      */
-    public function approve(SubscriptionRequest $request, ?string $note = null): array
+    public function verifyPayment(string $transactionId): array
     {
-        if ($request->status !== SubscriptionRequest::STATUS_PENDING) {
-            throw new RuntimeException('این درخواست قبلاً بررسی شده است.');
+        $order = SubscriptionOrder::where('transaction_id', $transactionId)->first();
+
+        if (!$order) {
+            return ['paid' => false, 'message' => 'سفارش اشتراک یافت نشد.'];
         }
 
-        if (!$request->isPaymentSettled()) {
-            throw new RuntimeException('پرداخت این درخواست هنوز انجام نشده است.');
+        if ($order->isPaid()) {
+            return ['paid' => true, 'order' => $order, 'message' => 'این تراکنش قبلاً تأیید شده است.'];
         }
 
-        $licenses = DB::transaction(function () use ($request, $note) {
-            $issued = [];
+        return $this->paymentService->verifySubscriptionPayment($transactionId);
+    }
 
-            foreach ($request->plan->packages()->get() as $package) {
-                $issued[] = app(LicenseService::class)->issueOrRenewForSubscription(
-                    $request->customer,
-                    $package,
-                    $package->pivot->duration_months,
-                    $request
-                );
+    /* ===================================================================
+     *  تأیید / رد مدیر
+     * =================================================================== */
+
+    /**
+     * تأیید درخواست اشتراک:
+     *  ۱) رکورد Subscription فعال ساخته می‌شود (اشتراکِ طرح‌محور)
+     *  ۲) برای هر پکیجِ همراه طرح، لایسنس رایگان (به مدت free_months) صادر/تمدید می‌شود
+     *  ۳) سفارش approved + بازه اعتبار ثبت می‌گردد
+     */
+    public function approve(SubscriptionOrder $order): Subscription
+    {
+        if ($order->admin_status === SubscriptionOrder::ADMIN_STATUS_APPROVED) {
+            return $order->subscription; // idempotent
+        }
+
+        if (!$order->isPaid()) {
+            throw new RuntimeException('این سفارش هنوز پرداخت نشده است؛ ابتدا باید پرداخت تأیید شود.');
+        }
+
+        if ($order->admin_status === SubscriptionOrder::ADMIN_STATUS_REJECTED) {
+            throw new RuntimeException('این درخواست قبلاً رد شده است.');
+        }
+
+        $plan     = $order->plan;
+        $customer = $order->customer;
+
+        return DB::transaction(function () use ($order, $plan, $customer) {
+            $months    = (int) ($plan?->duration_months ?? $order->meta['plan']['duration_months'] ?? 1);
+            $startsAt  = now();
+            $expiresAt = $months > 0 ? (clone $startsAt)->addMonths($months) : null;
+
+            // ۱) اشتراک فعال
+            $subscription = Subscription::create([
+                'customer_id'          => $customer->id,
+                'project_id'           => null, // اشتراکِ طرح‌محور، پروژه خاصی ندارد
+                'subscription_plan_id' => $plan?->id,
+                'subscription_order_id' => $order->id,
+                'start_date'           => $startsAt->toDateString(),
+                'end_date'             => $expiresAt?->toDateString(),
+                'expires_at'           => $expiresAt,
+                'status'               => 'active',
+                'price'                => $order->amount,
+                'discount'             => $order->discount,
+                'final_amount'         => $order->final_amount,
+                'payment_status'       => 'paid',
+                'description'          => 'اشتراک «' . $order->plan_name . '» — فعال‌شده پس از تأیید مدیر.',
+            ]);
+
+            // ۲) لایسنس رایگان پکیج‌های همراه طرح
+            $granted = [];
+            $packages = $plan
+                ? $plan->packages()->get(['packages.id', 'packages.name', 'packages.slug'])
+                : collect();
+            // اگر طرح حذف شده باشد، از snapshot سفارش استفاده می‌کنیم
+            if ($packages->isEmpty() && !empty($order->meta['plan']['packages'])) {
+                $packages = Package::whereIn('id', array_column($order->meta['plan']['packages'], 'id'))
+                    ->get()
+                    ->map(function ($p) use ($order) {
+                        $snap = collect($order->meta['plan']['packages'])->firstWhere('id', $p->id);
+                        $p->pivot = (object) ['free_months' => (int) ($snap['free_months'] ?? 1)];
+
+                        return $p;
+                    });
             }
 
-            $activated = array_map(fn ($l) => [
-                'package'    => $l->package?->name,
-                'package_id' => $l->package_id,
-                'license_key'=> $l->license_key,
-                'expires_at' => $l->expires_at?->toDateTimeString(),
-            ], $issued);
+            foreach ($packages as $package) {
+                $freeMonths = (int) ($package->pivot->free_months ?? 1);
+                $license    = $this->grantPackageAccess($customer, $package, $freeMonths, $order);
 
-            $request->update([
-                'status'      => SubscriptionRequest::STATUS_APPROVED,
-                'approved_at' => now(),
-                'admin_note'  => $note ?: $request->admin_note,
-                'meta'        => array_merge($request->meta ?? [], ['activated_licenses' => $activated]),
+                if ($license) {
+                    $granted[] = [
+                        'package' => $package->name,
+                        'months'  => $freeMonths,
+                        'license' => $license->license_key,
+                    ];
+                }
+            }
+
+            // ۳) نهایی‌سازی سفارش
+            $order->update([
+                'admin_status'    => SubscriptionOrder::ADMIN_STATUS_APPROVED,
+                'approved_at'     => now(),
+                'subscription_id' => $subscription->id,
+                'starts_at'       => $startsAt,
+                'expires_at'      => $expiresAt,
             ]);
 
-            Log::info('Subscription request approved', [
-                'request_id' => $request->id,
-                'plan'       => $request->plan->name,
-                'customer'   => $request->customer->name,
-                'licenses'   => count($issued),
+            Log::info('Subscription order approved', [
+                'order_id'       => $order->id,
+                'customer_id'    => $customer->id,
+                'subscription'   => $subscription->id,
+                'granted_packages' => count($granted),
             ]);
 
-            return $issued;
+            return $subscription;
         });
-
-        return $licenses;
     }
 
-    /**
-     * رد درخواست توسط مدیر (با یادداشت اختیاری)
-     */
-    public function reject(SubscriptionRequest $request, ?string $note = null): void
+    /** رد درخواست اشتراک توسط مدیر */
+    public function reject(SubscriptionOrder $order, ?string $reason = null): void
     {
-        if ($request->status !== SubscriptionRequest::STATUS_PENDING) {
-            throw new RuntimeException('این درخواست قبلاً بررسی شده است.');
+        if ($order->admin_status === SubscriptionOrder::ADMIN_STATUS_APPROVED) {
+            throw new RuntimeException('این درخواست قبلاً تأیید و اشتراک فعال شده است؛ نمی‌توان آن را رد کرد.');
         }
 
-        $request->update([
-            'status'      => SubscriptionRequest::STATUS_REJECTED,
-            'rejected_at' => now(),
-            'admin_note'  => $note,
+        $order->update([
+            'admin_status'    => SubscriptionOrder::ADMIN_STATUS_REJECTED,
+            'rejected_at'     => now(),
+            'rejected_reason' => $reason ?: 'درخواست شما توسط مدیر رد شد.',
         ]);
+    }
 
-        Log::info('Subscription request rejected', [
-            'request_id' => $request->id,
-            'plan'       => $request->plan->name,
-            'customer'   => $request->customer->name,
-        ]);
+    /* ===================================================================
+     *  صدور دسترسی رایگان به پکیج
+     * =================================================================== */
+
+    /**
+     * صدور یا تمدید لایسنس رایگان یک پکیج برای مشتری:
+     *  - اگر لایسنس فعال/منقضی (غیر باطل‌شده) دارد → تمدید: از انقضای فعلی + free_months
+     *  - در غیر این صورت → لایسنس جدید از الان + free_months
+     *
+     * @param  int $freeMonths مدت دسترسی رایگان (۰ = نامحدود)
+     */
+    public function grantPackageAccess(Customer $customer, Package $package, int $freeMonths, SubscriptionOrder $order): PackageLicense
+    {
+        return DB::transaction(function () use ($customer, $package, $freeMonths, $order) {
+            $existing = PackageLicense::query()
+                ->where('package_id', $package->id)
+                ->where('customer_id', $customer->id)
+                ->whereIn('status', [PackageLicense::STATUS_ACTIVE, PackageLicense::STATUS_EXPIRED])
+                ->latest('id')
+                ->first();
+
+            $startsAt = now();
+            $baseDate = ($existing && $existing->isActive() && $existing->expires_at)
+                ? Carbon::parse($existing->expires_at)
+                : now();
+            $expiresAt = $freeMonths > 0 ? (clone $baseDate)->addMonths($freeMonths) : null;
+
+            $license = PackageLicense::create([
+                'license_key'     => PackageLicense::generateKey(),
+                'package_id'      => $package->id,
+                'customer_id'     => $customer->id,
+                'renewed_from'    => $existing?->id,
+                'status'          => PackageLicense::STATUS_ACTIVE,
+                'starts_at'       => $startsAt,
+                'expires_at'      => $expiresAt,
+                'duration_months' => $freeMonths,
+                'notes'           => 'دسترسی رایگان از طریق اشتراک «' . $order->plan_name . '».',
+            ]);
+
+            if ($existing) {
+                $existing->update(['status' => PackageLicense::STATUS_REVOKED]);
+            }
+
+            return $license;
+        });
+    }
+
+    /* ===================================================================
+     *  وضعیت‌ها
+     * =================================================================== */
+
+    /** تعداد درخواست‌های در انتظار تأیید مدیر (برای داشبورد/سایدبار) */
+    public static function pendingApprovalsCount(): int
+    {
+        return SubscriptionOrder::query()
+            ->where('admin_status', SubscriptionOrder::ADMIN_STATUS_PENDING)
+            ->where('status', SubscriptionOrder::STATUS_PAID)
+            ->count();
+    }
+
+    /** اشتراک‌های فعالِ طرح‌محور یک مشتری */
+    public function activePlanSubscriptions(Customer $customer)
+    {
+        return $customer->subscriptions()
+            ->whereNotNull('subscription_plan_id')
+            ->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->with('plan')
+            ->get();
     }
 }

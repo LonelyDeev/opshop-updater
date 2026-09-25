@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Purchases;
 
+use App\Livewire\Concerns\WithToasts;
 use App\Models\PackagePurchase;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -11,7 +12,11 @@ use Livewire\Component;
 #[Title('جزئیات خرید')]
 class Show extends Component
 {
+    use WithToasts;
+
     public PackagePurchase $purchase;
+
+    public bool $confirmingDelete = false;
 
     public function mount(PackagePurchase $purchase): void
     {
@@ -24,6 +29,17 @@ class Show extends Component
         ]);
 
         $this->purchase = $purchase;
+    }
+
+    /** حذف خرید و بازگشت به فهرست */
+    public function delete(): void
+    {
+        $purchase = $this->purchase;
+
+        $purchase->delete();
+
+        $this->toast('خرید حذف شد.');
+        $this->redirect(route('admin.purchases.index'), true);
     }
 
     public function render()

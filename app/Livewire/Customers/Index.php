@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Customers;
 
+use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Customer;
 use Livewire\Attributes\Computed;
@@ -15,7 +16,7 @@ use Livewire\WithPagination;
 #[Title('مشتریان')]
 class Index extends Component
 {
-    use WithPagination, WithToasts;
+    use WithPagination, WithToasts, WithBulkActions;
 
     #[Url]
     public string $search = '';
@@ -23,7 +24,7 @@ class Index extends Component
     #[Url]
     public string $status = '';
 
-    /** مرتب‌سازی — پیش‌فرض همان ترتیب قبلی صفحه (جدیدترین) است */
+    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، نام و… */
     #[Url]
     public string $sort = 'newest';
 
@@ -33,13 +34,6 @@ class Index extends Component
     public bool $showModal = false;
     public ?int $editingId = null;
     public ?int $deleteId = null;
-
-    /** @var array<int,int> */
-    public array $selected = [];
-
-    public bool $selectAll = false;
-
-    public bool $showBulkModal = false;
 
     /** نمایش کد آپدیت در مودال ویرایش (فقط‌خواندنی) */
     public ?string $updateCode = null;
@@ -74,6 +68,8 @@ class Index extends Component
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->sort === 'newest', fn ($q) => $q->latest())
             ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
+            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
+            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
             ->when($this->sort === 'name_asc', fn ($q) => $q->orderBy('name'))
             ->when($this->sort === 'name_desc', fn ($q) => $q->orderByDesc('name'))
             ->paginate(12);
@@ -118,6 +114,25 @@ class Index extends Component
         $this->showModal = false;
     }
 
+    /* ---------------------------------------------------------------- */
+    /*  Bulk selection (WithBulkActions)                                 */
+    /* ---------------------------------------------------------------- */
+
+    public function bulkPageIds(): array
+    {
+        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    public function deleteSelectedRecords(): void
+    {
+        $ids = array_map('intval', $this->selectedIds);
+
+        // اشتراک‌ها/لایسنس‌ها/خریدهای مرتبط با FK cascade حذف می‌شوند
+        $count = Customer::query()->whereIn('id', $ids)->delete();
+
+        $this->toast(fa_num($count) . ' مشتری حذف شد.');
+    }
+
     public function delete(): void
     {
         $customer = Customer::findOrFail($this->deleteId ?? 0);
@@ -126,64 +141,6 @@ class Index extends Component
         $customer->delete();
         $this->deleteId = null;
         $this->toast("مشتری «{$name}» حذف شد.");
-    }
-
-    /* ---------------------------------------------------------------- */
-    /*  حذف چندتایی                                                      */
-    /* ---------------------------------------------------------------- */
-
-    public function updatedSelectAll(bool $value): void
-    {
-        $ids = $this->records()->pluck('id')->all();
-
-        $this->selected = $value
-            ? array_values(array_unique(array_merge($this->selected, $ids)))
-            : array_values(array_diff($this->selected, $ids));
-    }
-
-    public function toggleSelect(int $id): void
-    {
-        $this->selected = in_array($id, $this->selected)
-            ? array_values(array_diff($this->selected, [$id]))
-            : array_values(array_merge($this->selected, [$id]));
-
-        // همگام‌سازی چک‌باکس سربرگ با وضعیت صفحه فعلی
-        $pageIds = $this->records()->pluck('id')->all();
-        $this->selectAll = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
-    }
-
-    public function clearSelection(): void
-    {
-        $this->selected = [];
-        $this->selectAll = false;
-    }
-
-    public function confirmBulkDelete(): void
-    {
-        if (empty($this->selected)) {
-            return;
-        }
-
-        $this->showBulkModal = true;
-    }
-
-    public function bulkDelete(): void
-    {
-        if (empty($this->selected)) {
-            $this->showBulkModal = false;
-
-            return;
-        }
-
-        $count = 0;
-        foreach (Customer::whereIn('id', $this->selected)->get() as $customer) {
-            $customer->delete();
-            $count++;
-        }
-
-        $this->clearSelection();
-        $this->showBulkModal = false;
-        $this->toast(fa_num($count) . ' مشتری انتخاب‌شده حذف شد.');
     }
 
     /** @return array<string, array<int, string>|string> */

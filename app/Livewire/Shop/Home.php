@@ -77,9 +77,24 @@ class Home extends Component
     public function stats(): array
     {
         return [
-            'packages' => Package::where('status', Package::STATUS_ACTIVE)->count(),
-            'versions' => \App\Models\PackageVersion::where('status', \App\Models\PackageVersion::STATUS_ACTIVE)->count(),
+            'packages'    => Package::where('status', Package::STATUS_ACTIVE)->count(),
+            'versions'    => \App\Models\PackageVersion::where('status', \App\Models\PackageVersion::STATUS_ACTIVE)->count(),
+            'plans'       => \App\Models\SubscriptionPlan::where('is_active', true)->count(),
+            'customers'   => \App\Models\PackagePurchase::distinct('customer_id')->count('customer_id'),
         ];
+    }
+
+    /** ۳ طرح اشتراک برتر برای تیزر صفحه اصلی */
+    #[Computed]
+    public function featuredPlans()
+    {
+        return \App\Models\SubscriptionPlan::query()
+            ->active()
+            ->with(['packages:id,name,slug'])
+            ->orderBy('sort_order')
+            ->orderByDesc('id')
+            ->limit(3)
+            ->get();
     }
 
     public function render()

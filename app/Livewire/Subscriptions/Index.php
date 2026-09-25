@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Subscriptions;
 
+use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Customer;
 use App\Models\Project;
@@ -18,7 +19,7 @@ use Livewire\WithPagination;
 #[Title('اشتراک‌ها')]
 class Index extends Component
 {
-    use WithPagination, WithToasts;
+    use WithPagination, WithToasts, WithBulkActions;
 
     #[Url]
     public string $search = '';
@@ -32,7 +33,7 @@ class Index extends Component
     #[Url]
     public string $project_id = '';
 
-    /** مرتب‌سازی — پیش‌فرض همان ترتیب قبلی صفحه (جدیدترین) است */
+    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، انقضا، تاریخ شروع و… */
     #[Url]
     public string $sort = 'newest';
 
@@ -42,13 +43,6 @@ class Index extends Component
     public bool $showModal = false;
     public ?int $editingId = null;
     public ?int $deleteId = null;
-
-    /** @var array<int,int> */
-    public array $selected = [];
-
-    public bool $selectAll = false;
-
-    public bool $showBulkModal = false;
 
     /** مودال تمدید */
     public ?int $extendId = null;
@@ -96,8 +90,12 @@ class Index extends Component
             ->when($this->project_id, fn ($q) => $q->where('project_id', $this->project_id))
             ->when($this->sort === 'newest', fn ($q) => $q->latest())
             ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
-            ->when($this->sort === 'expiry_soonest', fn ($q) => $q->orderByRaw('expires_at is null')->orderBy('expires_at'))
-            ->when($this->sort === 'expiry_latest', fn ($q) => $q->orderByRaw('expires_at is null desc')->orderByDesc('expires_at'))
+            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
+            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
+            ->when($this->sort === 'expires_soon', fn ($q) => $q->orderByRaw('expires_at is null')->orderBy('expires_at'))
+            ->when($this->sort === 'expires_late', fn ($q) => $q->orderByRaw('expires_at is null')->orderByDesc('expires_at'))
+            ->when($this->sort === 'newest_start', fn ($q) => $q->orderByDesc('start_date'))
+            ->when($this->sort === 'oldest_start', fn ($q) => $q->orderBy('start_date'))
             ->paginate(12);
     }
 
@@ -223,6 +221,24 @@ class Index extends Component
         $this->toast('اشتراک تا ' . fa_num(verta_date($newExpiry)) . ' تمدید شد.');
     }
 
+    /* ---------------------------------------------------------------- */
+    /*  Bulk selection (WithBulkActions)                                 */
+    /* ---------------------------------------------------------------- */
+
+    public function bulkPageIds(): array
+    {
+        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    public function deleteSelectedRecords(): void
+    {
+        $ids = array_map('intval', $this->selectedIds);
+
+        $count = Subscription::query()->whereIn('id', $ids)->delete();
+
+        $this->toast(fa_num($count) . ' اشتراک حذف شد.');
+    }
+
     public function delete(): void
     {
         $subscription = Subscription::findOrFail($this->deleteId ?? 0);
@@ -230,64 +246,6 @@ class Index extends Component
         $subscription->delete();
         $this->deleteId = null;
         $this->toast('اشتراک حذف شد.');
-    }
-
-    /* ---------------------------------------------------------------- */
-    /*  حذف چندتایی                                                      */
-    /* ---------------------------------------------------------------- */
-
-    public function updatedSelectAll(bool $value): void
-    {
-        $ids = $this->records()->pluck('id')->all();
-
-        $this->selected = $value
-            ? array_values(array_unique(array_merge($this->selected, $ids)))
-            : array_values(array_diff($this->selected, $ids));
-    }
-
-    public function toggleSelect(int $id): void
-    {
-        $this->selected = in_array($id, $this->selected)
-            ? array_values(array_diff($this->selected, [$id]))
-            : array_values(array_merge($this->selected, [$id]));
-
-        // همگام‌سازی چک‌باکس سربرگ با وضعیت صفحه فعلی
-        $pageIds = $this->records()->pluck('id')->all();
-        $this->selectAll = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
-    }
-
-    public function clearSelection(): void
-    {
-        $this->selected = [];
-        $this->selectAll = false;
-    }
-
-    public function confirmBulkDelete(): void
-    {
-        if (empty($this->selected)) {
-            return;
-        }
-
-        $this->showBulkModal = true;
-    }
-
-    public function bulkDelete(): void
-    {
-        if (empty($this->selected)) {
-            $this->showBulkModal = false;
-
-            return;
-        }
-
-        $count = 0;
-        foreach (Subscription::whereIn('id', $this->selected)->get() as $subscription) {
-            $subscription->delete();
-            $count++;
-        }
-
-        $this->clearSelection();
-        $this->showBulkModal = false;
-        $this->toast(fa_num($count) . ' اشتراک انتخاب‌شده حذف شد.');
     }
 
     /** @return array<string, array<int, string>|string> */

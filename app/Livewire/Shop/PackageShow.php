@@ -87,6 +87,23 @@ class PackageShow extends Component
         return $this->package->images->where('is_active', true);
     }
 
+    /** طرح‌های اشتراکی که این پکیج را رایگان می‌کنند (پیشنهاد جایگزین خرید تکی) */
+    #[Computed]
+    public function subscriptionPlansWithThisPackage()
+    {
+        if ($this->package->is_free) {
+            return collect();
+        }
+
+        return \App\Models\SubscriptionPlan::query()
+            ->active()
+            ->whereHas('packages', fn ($q) => $q->where('packages.id', $this->package->id))
+            ->with(['packages' => fn ($q) => $q->where('packages.id', $this->package->id)])
+            ->orderBy('sort_order')
+            ->limit(3)
+            ->get();
+    }
+
     /** آیا این پکیج مسیر رایگان دارد؟ */
     #[Computed]
     public function isFreeRoute(): bool

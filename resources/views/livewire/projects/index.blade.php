@@ -20,27 +20,33 @@
             <option value="pending">در انتظار</option>
             <option value="archived">بایگانی شده</option>
         </select>
-        <select wire:model.live="sort" class="input sm:w-44" aria-label="مرتب‌سازی">
-            <option value="newest">جدیدترین</option>
-            <option value="oldest">قدیمی‌ترین</option>
-            <option value="name_asc">نام (الفبایی)</option>
-        </select>
+        <div class="relative sm:w-44">
+            <x-icon name="arrow-up-down" class="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+            <select wire:model.live="sort" class="input ps-10" aria-label="ترتیب نمایش">
+                <option value="newest">جدیدترین</option>
+                <option value="oldest">قدیمی‌ترین</option>
+                <option value="id_desc">شناسه (نزولی)</option>
+                <option value="id_asc">شناسه (صعودی)</option>
+                <option value="name_asc">بر اساس نام</option>
+                <option value="name_desc">بر اساس نام (معکوس)</option>
+            </select>
+        </div>
         <div wire:loading wire:target="search, status, sort" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
             <x-icon name="loader" class="size-4 animate-spin" />
             در حال فیلتر…
         </div>
     </div>
 
-    {{-- bulk selection bar --}}
-    @if(count($selected) > 0)
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-(--radius-card) bg-amber-50 p-4 ring-1 ring-amber-300/70 dark:bg-amber-500/10 dark:ring-amber-500/30">
-            <div class="flex items-center gap-2.5 text-sm font-bold text-amber-800 dark:text-amber-300">
-                <x-icon name="check-check" class="size-5 shrink-0" />
-                <span>{{ fa_num(count($selected)) }} مورد انتخاب شده</span>
+    {{-- bulk toolbar --}}
+    @if($selectedIds)
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rose-50 p-3 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:ring-rose-400/20">
+            <div class="flex items-center gap-2 text-sm font-bold text-rose-700 dark:text-rose-400">
+                <x-icon name="check-square" class="size-4.5" />
+                {{ fa_num(count($selectedIds)) }} پروژه انتخاب شده است
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <x-btn variant="ghost" icon="x" wire:click="clearSelection">لغو انتخاب</x-btn>
-                <x-btn variant="danger" icon="trash" wire:click="confirmBulkDelete">حذف انتخاب‌شده‌ها</x-btn>
+            <div class="flex items-center gap-2">
+                <x-btn variant="secondary" size="sm" wire:click="clearSelection">انصراف از انتخاب</x-btn>
+                <x-btn variant="danger" icon="trash" size="sm" wire:click="$set('confirmingBulkDelete', true)">حذف گروهی</x-btn>
             </div>
         </div>
     @endif
@@ -53,7 +59,9 @@
                     <thead>
                         <tr>
                             <th class="w-10">
-                                <input type="checkbox" wire:model.live="selectAll" class="checkbox" aria-label="انتخاب همه پروژه‌های این صفحه">
+                                <input type="checkbox" class="checkbox" aria-label="انتخاب همه"
+                                       @if($this->allPageSelected()) checked @endif
+                                       wire:click="toggleSelectAll" />
                             </th>
                             <th>پروژه</th>
                             <th class="hidden md:table-cell">نامک</th>
@@ -67,8 +75,9 @@
                     <tbody>
                         @foreach($this->records as $project)
                             <tr wire:key="project-{{ $project->id }}">
-                                <td class="w-10">
-                                    <input type="checkbox" wire:click="toggleSelect({{ $project->id }})" @checked(in_array($project->id, $selected)) class="checkbox" aria-label="انتخاب پروژه {{ $project->name }}">
+                                <td>
+                                    <input type="checkbox" class="checkbox" aria-label="انتخاب این پروژه"
+                                           wire:model.live="selectedIds" value="{{ $project->id }}" />
                                 </td>
                                 <td>
                                     <div class="flex items-center gap-3">
@@ -168,7 +177,7 @@
             <div class="space-y-4">
                 <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
                     <x-icon name="alert-triangle" class="size-6 shrink-0" />
-                    <p class="text-sm leading-6">آیا از حذف پروژه «<strong>{{ $target?->name }}</strong>» مطمئن هستید؟ پروژه‌ای که آپدیت یا پکیج دارد قابل حذف نیست. این عمل قابل بازگشت نیست.</p>
+                    <p class="text-sm leading-6">آیا از حذف پروژه «<strong>{{ $target?->name }}</strong>» مطمئن هستید؟ این عمل قابل بازگشت نیست.</p>
                 </div>
                 <div class="flex items-center justify-end gap-2">
                     <x-btn variant="secondary" wire:click="$set('deleteId', null)">انصراف</x-btn>
@@ -179,24 +188,19 @@
     </x-modal>
 
     {{-- bulk delete confirm --}}
-    <x-modal wire:model="showBulkModal" :title="'حذف ' . fa_num(count($selected)) . ' پروژه'" size="sm">
-        @if(count($selected) > 0)
+    <x-modal wire:model="confirmingBulkDelete" title="حذف گروهی پروژه‌ها" size="sm">
+        @if($confirmingBulkDelete)
             <div class="space-y-4">
-                <div class="space-y-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
-                    <div class="flex items-center gap-3">
-                        <x-icon name="alert-triangle" class="size-6 shrink-0" />
-                        <p class="text-sm leading-6">
-                            {{ fa_num(count($selected)) }} پروژه انتخاب‌شده برای همیشه حذف می‌شوند.
-                            این عمل قابل بازگشت نیست.
-                        </p>
-                    </div>
-                    <p class="text-xs leading-6">
-                        ⚠️ فقط پروژه‌های بدون آپدیت و پکیج حذف می‌شوند؛ حذف پروژه باعث حذف آبشاری آپدیت‌ها، پکیج‌ها و داده‌های وابسته آن می‌شود، بنابراین پروژه‌های پر شده رد می‌شوند.
+                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
+                    <x-icon name="trash" class="size-6 shrink-0" />
+                    <p class="text-sm leading-6">
+                        <strong>{{ fa_num(count($selectedIds)) }}</strong> پروژه انتخاب‌شده برای همیشه حذف شود؟
+                        پروژه‌های دارای آپدیت یا پکیج حذف نخواهند شد. این عمل قابل بازگشت نیست.
                     </p>
                 </div>
                 <div class="flex items-center justify-end gap-2">
-                    <x-btn variant="secondary" wire:click="$set('showBulkModal', false)">انصراف</x-btn>
-                    <x-btn variant="danger" icon="trash" wire:click="bulkDelete" :loading="true">حذف قطعی</x-btn>
+                    <x-btn variant="secondary" wire:click="clearSelection">انصراف</x-btn>
+                    <x-btn variant="danger" icon="trash" wire:click="bulkDelete" :loading="true">حذف {{ fa_num(count($selectedIds)) }} پروژه</x-btn>
                 </div>
             </div>
         @endif
