@@ -39,6 +39,8 @@ php artisan serve          # http://localhost:8000
 # تغییر CSS/JS: bun install && bun run build  (یا npm)
 ```
 
+**⚠️ برای آپلود فایل‌های بزرگ (ZIP پکیج تا ۵۰۰MB):** علاوه بر سقف Livewire (که در `config/livewire.php` روی ۵۰۰MB است)، محدودیت‌های PHP را هم در php.ini بالا ببرید: `upload_max_filesize = 512M` ، `post_max_size = 512M` ، `memory_limit = 512M` ، `max_execution_time = 300` — (لاراگون: منوی PHP → php.ini؛ سی‌پنل: MultiPHP INI Editor). سپس وب‌سرور/PHP را ری‌استارت کنید.
+
 **ورود پنل:** `admin@panel.test` / `secret123` — **کد آپدیت مشتری دمو:** `1F61148198FD` (علی رضایی، active)، `DDE00593DD90` (مریم حسینی)، `C28ACDCDF536` (غیرفعال — برای تست خطا).
 
 ---
@@ -186,6 +188,9 @@ checkout در `Shop\PackageShow::buy()`: کد آپدیت → Customer → گار
     - درایور local تنظیمات فرم (title/description/payButton/...) را از `get_gateway_configs` می‌گیرد (case «local» در helper با fallback‌ها)؛ ردیف gateway با key=local هم seed شده (پیش‌فرض غیرفعال).
 17. **`latestVersion()` رابطه است** — `$package->latestVersion()` خودِ HasOne را برمی‌گرداند (truthy!)؛ همیشه `->first()` صدا بزنید. باگ API verifyPayment همین بود (TypeError در createDownloadToken).
 18. **رکورد pending یتیم**: اگر `createPayment` بعد از `PackagePurchase::create` شکست بخورد، رکورد pending می‌ماند → در purchase API حالا `$purchase->delete()` در catch.
+19. **آپلود تصویر با Livewire — هرگز `$file->move()` نزنید**: فایل‌های آپلودی Livewire (TemporaryUploadedFile) در درخواست *قبلی* (POST به `/livewire/upload-file`) آپلود شده‌اند؛ `move()` در پس‌زمینه `move_uploaded_file()` صدا می‌زند که فقط روی فایل‌های *همین درخواست* کار می‌کند → خطای `Could not move the file "…livewire-tmp/…" to "…public/uploads/…"` (روی ویندوز/لاراگون کاربر دیده شد). راه‌حل در `ImageUploadService::persistFile()`: `rename()` معمولی + fallback کپی استریمی (`stream_copy_to_stream`) + حذف مبدأ — هم برای فایل موقت Livewire هم آپلود معمولی، روی هر OS.
+20. **CKEditor 4 حالت Source رویداد change نمی‌دهد**: وقتی کاربر روی دکمه «منبع» می‌زند و HTML خام تایپ می‌کند، رویداد `change` ادیتور خاموش است → textarea مخفی (wire:model) هیچ‌وقت آپدیت نمی‌شود و سمت سرر **خالی** می‌رسد. راه‌حل در `resources/js/ckeditor.js` (richEditor): شنونده `mode` → در حالت source روی `textarea.cke_source` مستقیماً input/change/blur بسته می‌شود و sync() اجرا می‌شود؛ برگشت به wysiwyg هم یک sync اجباری دارد. علاوه بر این `allowedContent: true` ست شده تا HTML خام (کلاس/دیتا-اتربیوت‌های سفارشی) در رفت‌وبرگشت wysiwyg⇄source حذف نشود.
+21. **سقف پیش‌فرض آپلود موقت Livewire فقط ۱۲MB است**: `livewire.temporary_file_upload.rules` وقتی null باشد → `['required','file','max:12288']` → آپلود فایل‌های ZIP بزرگ پکیج با پیام «The versionFile failed to upload.» می‌شکند. حالا در `config/livewire.php` سقف ۵۰۰MB است. **محدودیت‌های PHP باید جداگانه بالا برود** (درگاه آپلود تک‌پارچه است، نه chunked): `upload_max_filesize` و `post_max_size` و `memory_limit` — لاراگون: php.ini از منوی PHP؛ سی‌پنل: MultiPHP INI Editor؛ اگر PHP قبول نکند، همان پیام failed to upload دوباره ظاهر می‌شود.
 
 
 ---

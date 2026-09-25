@@ -19,47 +19,6 @@
     </div>
 
     @if(count($gateways))
-        {{-- filters / selection toolbar --}}
-        <div class="card flex flex-wrap items-center justify-between gap-3 p-4">
-            <label class="flex cursor-pointer select-none items-center gap-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                <input type="checkbox" class="checkbox" aria-label="انتخاب همه درگاه‌ها"
-                       @if($this->allPageSelected()) checked @endif
-                       wire:click="toggleSelectAll" />
-                انتخاب همه درگاه‌ها
-            </label>
-            <div class="relative sm:w-52">
-                <x-icon name="arrow-up-down" class="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-                <select wire:model.live="sort" class="input ps-10" aria-label="ترتیب نمایش">
-                    <option value="newest">جدیدترین</option>
-                    <option value="oldest">قدیمی‌ترین</option>
-                    <option value="id_desc">شناسه (نزولی)</option>
-                    <option value="id_asc">شناسه (صعودی)</option>
-                    <option value="ordering_asc">بر اساس ترتیب نمایش</option>
-                    <option value="name_asc">بر اساس نام</option>
-                </select>
-            </div>
-            <div wire:loading wire:target="sort" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
-                <x-icon name="loader" class="size-4 animate-spin" />
-                در حال مرتب‌سازی…
-            </div>
-        </div>
-
-        {{-- bulk toolbar --}}
-        @if($selectedIds)
-            <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rose-50 p-3 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:ring-rose-400/20">
-                <div class="flex items-center gap-2 text-sm font-bold text-rose-700 dark:text-rose-400">
-                    <x-icon name="check-square" class="size-4.5" />
-                    {{ fa_num(count($selectedIds)) }} درگاه انتخاب شده است
-                </div>
-                <div class="flex items-center gap-2">
-                    <x-btn variant="secondary" size="sm" wire:click="clearSelection">انصراف از انتخاب</x-btn>
-                    <x-btn variant="danger" icon="trash" size="sm" wire:click="$set('confirmingBulkDelete', true)">حذف گروهی</x-btn>
-                </div>
-            </div>
-        @endif
-    @endif
-
-    @if(count($gateways))
         <form wire:submit="save" class="space-y-6">
             <div class="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
                 @foreach($gateways as $index => $gw)
@@ -72,8 +31,6 @@
                     <div wire:key="gw-{{ $gw['id'] }}" class="card flex flex-col">
                         {{-- gateway header --}}
                         <div class="flex items-center gap-3 border-b border-zinc-200/80 p-4 dark:border-zinc-800">
-                            <input type="checkbox" class="checkbox shrink-0" aria-label="انتخاب این درگاه"
-                                   wire:model.live="selectedIds" value="{{ $gw['id'] }}" />
                             <div class="flex size-11 shrink-0 items-center justify-center rounded-xl {{ $gw['is_active'] ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500' }}">
                                 <x-icon name="credit-card" class="size-5.5" />
                             </div>
@@ -85,11 +42,6 @@
                                 </div>
                             </div>
                             <x-toggle wire:model.live="gateways.{{ $index }}.is_active" id="gw-active-{{ $gw['id'] }}" />
-                            <button type="button" wire:click="$set('deleteId', {{ $gw['id'] }})"
-                                    class="shrink-0 rounded-lg p-2 text-zinc-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                                    title="حذف درگاه">
-                                <x-icon name="trash" class="size-4.5" />
-                            </button>
                         </div>
 
                         {{-- gateway body --}}
@@ -135,44 +87,4 @@
             <x-empty icon="credit-card" title="درگاهی یافت نشد" description="درگاه‌های پشتیبانی‌شده در فایل پیکربندی سیستم تعریف نشده‌اند." />
         </div>
     @endif
-
-    {{-- single delete confirm --}}
-    <x-modal wire:model="deleteId" title="حذف درگاه" size="sm">
-        @if($deleteId)
-            @php($target = \App\Models\Gateway::with('configs')->find($deleteId))
-            @php($label = $target ? ($schema[$target->key]['label'] ?? $target->name) : null)
-            <div class="space-y-4">
-                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
-                    <x-icon name="trash" class="size-6 shrink-0" />
-                    <p class="text-sm leading-6">
-                        درگاه «<strong>{{ $label }}</strong>» و تنظیمات پیکربندی آن برای همیشه حذف شود؟
-                        این عمل قابل بازگشت نیست؛ درگاه‌های پشتیبانی‌شده پس از بارگذاری مجدد صفحه از پیکربندی سیستم دوباره ساخته می‌شوند.
-                    </p>
-                </div>
-                <div class="flex items-center justify-end gap-2">
-                    <x-btn variant="secondary" wire:click="$set('deleteId', null)">انصراف</x-btn>
-                    <x-btn variant="danger" icon="trash" wire:click="delete" :loading="true">حذف قطعی</x-btn>
-                </div>
-            </div>
-        @endif
-    </x-modal>
-
-    {{-- bulk delete confirm --}}
-    <x-modal wire:model="confirmingBulkDelete" title="حذف گروهی درگاه‌ها" size="sm">
-        @if($confirmingBulkDelete)
-            <div class="space-y-4">
-                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
-                    <x-icon name="trash" class="size-6 shrink-0" />
-                    <p class="text-sm leading-6">
-                        <strong>{{ fa_num(count($selectedIds)) }}</strong> درگاه انتخاب‌شده به‌همراه تنظیمات پیکربندی‌شان برای همیشه حذف شود؟
-                        این عمل قابل بازگشت نیست؛ درگاه‌های پشتیبانی‌شده پس از بارگذاری مجدد صفحه از پیکربندی سیستم دوباره ساخته می‌شوند.
-                    </p>
-                </div>
-                <div class="flex items-center justify-end gap-2">
-                    <x-btn variant="secondary" wire:click="clearSelection">انصراف</x-btn>
-                    <x-btn variant="danger" icon="trash" wire:click="bulkDelete" :loading="true">حذف {{ fa_num(count($selectedIds)) }} درگاه</x-btn>
-                </div>
-            </div>
-        @endif
-    </x-modal>
 </div>

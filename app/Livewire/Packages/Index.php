@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Packages;
 
-use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Package;
 use App\Models\Project;
@@ -19,7 +18,7 @@ use Livewire\WithPagination;
 #[Title('پکیج‌ها')]
 class Index extends Component
 {
-    use WithPagination, WithToasts, WithBulkActions;
+    use WithPagination, WithToasts;
 
     #[Url]
     public string $search = '';
@@ -29,10 +28,6 @@ class Index extends Component
 
     #[Url]
     public string $project_id = '';
-
-    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، نام، قیمت، دانلود و… */
-    #[Url]
-    public string $sort = 'newest';
 
     public bool $showModal = false;
 
@@ -69,11 +64,6 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function updatedSort(): void
-    {
-        $this->resetPage();
-    }
-
     #[Computed]
     public function records()
     {
@@ -85,15 +75,7 @@ class Index extends Component
                 ->orWhere('slug', 'like', "%{$this->search}%")))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->project_id !== '', fn ($q) => $q->where('project_id', (int) $this->project_id))
-            ->when($this->sort === 'newest', fn ($q) => $q->latest())
-            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
-            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
-            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
-            ->when($this->sort === 'name_asc', fn ($q) => $q->orderBy('name'))
-            ->when($this->sort === 'name_desc', fn ($q) => $q->orderByDesc('name'))
-            ->when($this->sort === 'price_desc', fn ($q) => $q->orderByDesc('default_price'))
-            ->when($this->sort === 'price_asc', fn ($q) => $q->orderByRaw('default_price is null')->orderBy('default_price'))
-            ->when($this->sort === 'downloads_desc', fn ($q) => $q->orderByDesc('downloads_count'))
+            ->latest()
             ->paginate(12);
     }
 
@@ -101,41 +83,6 @@ class Index extends Component
     public function projects()
     {
         return Project::query()->orderBy('name')->get(['id', 'name']);
-    }
-
-    /* ---------------------------------------------------------------- */
-    /*  Bulk selection (WithBulkActions)                                 */
-    /* ---------------------------------------------------------------- */
-
-    public function bulkPageIds(): array
-    {
-        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
-    }
-
-    public function deleteSelectedRecords(): void
-    {
-        $ids = array_map('intval', $this->selectedIds);
-
-        $packages = Package::query()->with(['images', 'versions'])->whereIn('id', $ids)->get();
-
-        $imageService = app(ImageUploadService::class);
-
-        foreach ($packages as $package) {
-            // حذف تصویر شاخص و گالری (مثل حذف تکی)
-            $imageService->deleteThumbnail($package);
-            $imageService->deleteAllGalleryImages($package);
-
-            // حذف فایل‌های ZIP نسخه‌ها
-            foreach ($package->versions as $version) {
-                if ($version->file_path && file_exists(storage_path('app/' . $version->file_path))) {
-                    @unlink(storage_path('app/' . $version->file_path));
-                }
-            }
-
-            $package->delete();
-        }
-
-        $this->toast(fa_num(count($packages)) . ' پکیج و تمام نسخه‌های آن حذف شد.');
     }
 
     /* ---------------------------------------------------------------- */

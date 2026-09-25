@@ -4,9 +4,7 @@ namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
 use App\Models\PackagePurchase;
-use App\Models\SubscriptionOrder;
 use App\Services\PaymentService;
-use App\Services\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -16,11 +14,6 @@ use Illuminate\Http\Request;
  * هم GET و هم POST پشتیبانی می‌شود (POST درگاه‌ها CSRF ندارند →
  * مسیر payment/callback در استثناهای VerifyCsrfToken قرار دارد).
  *
- * دو نوع تراکنش از این مسیر عبور می‌کنند:
- *  ۱) خرید پکیج (PackagePurchase) — مانند قبل
- *  ۲) سفارش اشتراک (SubscriptionOrder) — پس از تأیید پرداخت، به صفحه نتیجه
- *     اشتراک می‌رود (پرداخت موفق + «در انتظار تأیید مدیر»).
- *
  * پس از تأیید پرداخت:
  *  - خریدهای API (callback_url بیرونی) → صفحه‌ی «نتیجه پرداخت» (payment/return)
  *    تا وضعیت + شمارش معکوس ۱۰ ثانیه‌ای نمایش داده شود و سپس به فروشگاه برگردد.
@@ -29,8 +22,7 @@ use Illuminate\Http\Request;
 class WebPaymentController extends Controller
 {
     public function __construct(
-        private PaymentService $paymentService,
-        private SubscriptionService $subscriptionService
+        private PaymentService $paymentService
     ) {}
 
     public function callback(Request $request): RedirectResponse
@@ -49,29 +41,6 @@ class WebPaymentController extends Controller
                 ->with('error', 'اطلاعات تراکنش ناقص است.');
         }
 
-        // ---------- ۱) سفارش اشتراک (طرح اشتراک) ----------
-        $subscriptionOrder = SubscriptionOrder::where('transaction_id', $transactionId)->first();
-
-        if ($subscriptionOrder) {
-            $result = $this->subscriptionService->verifyPayment($transactionId);
-            $subscriptionOrder->refresh();
-
-            // سفارش API (callback_url بیرونی) → صفحه نتیجه + شمارش معکوس، سپس فروشگاه
-            if ($subscriptionOrder->callback_url && !$this->isInternalCallback($subscriptionOrder->callback_url)) {
-                return redirect()->route('payment.return.subscription', array_merge($request->query(), [
-                    'order' => $subscriptionOrder->id,
-                ]));
-            }
-
-            return redirect()
-                ->route('subscription.result', $subscriptionOrder)
-                ->with(
-                    ($result['paid'] ?? false) ? 'success' : 'error',
-                    $result['message'] ?? (($result['paid'] ?? false) ? 'پرداخت با موفقیت تأیید شد.' : 'پرداخت ناموفق بود.')
-                );
-        }
-
-        // ---------- ۲) خرید پکیج (مانند قبل) ----------
         $purchase = PackagePurchase::where('transaction_id', $transactionId)->first();
 
         if (!$purchase) {
@@ -105,11 +74,10 @@ class WebPaymentController extends Controller
      */
     private function isInternalCallback(string $url): bool
     {
-        // هاست + پورت (پورت را هم مقایسه می‌کنیم تا localhost:3001 با localhost:8000 یکی تلقی نشود)
-        $given = [$this->hostWithPort($url), rtrim((string) parse_url($url, PHP_URL_PATH), '/')];
+        $given = [parse_url($url, PHP_URL_HOST), rtrim((string) parse_url($url, PHP_URL_PATH), '/')];
 
         foreach ([route('payment.callback'), route('api.packages.payment.callback')] as $panelUrl) {
-            $panel = [$this->hostWithPort($panelUrl), rtrim((string) parse_url($panelUrl, PHP_URL_PATH), '/')];
+            $panel = [parse_url($panelUrl, PHP_URL_HOST), rtrim((string) parse_url($panelUrl, PHP_URL_PATH), '/')];
 
             if ($given === $panel) {
                 return true;
@@ -117,14 +85,5 @@ class WebPaymentController extends Controller
         }
 
         return false;
-    }
-
-    /** هاست به‌همراه پورت (اگر وجود داشته باشد) برای مقایسه‌ی دقیق‌تر callback_url */
-    private function hostWithPort(string $url): string
-    {
-        $host = (string) parse_url($url, PHP_URL_HOST);
-        $port = parse_url($url, PHP_URL_PORT);
-
-        return $port ? $host . ':' . $port : $host;
     }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Users;
 
-use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\User;
 use Livewire\Attributes\Computed;
@@ -16,7 +15,7 @@ use Livewire\WithPagination;
 #[Title('کاربران پنل')]
 class Index extends Component
 {
-    use WithPagination, WithToasts, WithBulkActions;
+    use WithPagination, WithToasts;
 
     #[Url]
     public string $search = '';
@@ -26,10 +25,6 @@ class Index extends Component
 
     #[Url]
     public string $status = '';
-
-    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، نام و… */
-    #[Url]
-    public string $sort = 'newest';
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -53,11 +48,6 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function updatedSort(): void
-    {
-        $this->resetPage();
-    }
-
     #[Computed]
     public function records()
     {
@@ -67,12 +57,7 @@ class Index extends Component
                 ->orWhere('email', 'like', "%{$this->search}%")))
             ->when($this->role, fn ($q) => $q->where('role', $this->role))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
-            ->when($this->sort === 'newest', fn ($q) => $q->orderByDesc('created_at'))
-            ->when($this->sort === 'oldest', fn ($q) => $q->orderBy('created_at'))
-            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
-            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
-            ->when($this->sort === 'name_asc', fn ($q) => $q->orderBy('name'))
-            ->when($this->sort === 'name_desc', fn ($q) => $q->orderByDesc('name'))
+            ->orderByDesc('created_at')
             ->paginate(12);
     }
 
@@ -120,64 +105,6 @@ class Index extends Component
         $this->showModal = false;
     }
 
-    /* ---------------------------------------------------------------- */
-    /*  Bulk selection (WithBulkActions)                                 */
-    /* ---------------------------------------------------------------- */
-
-    public function bulkPageIds(): array
-    {
-        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
-    }
-
-    public function deleteSelectedRecords(): void
-    {
-        $ids = array_values(array_unique(array_map('intval', $this->selectedIds)));
-
-        $skipped = false;
-
-        // کاربر جاری هرگز حذف نمی‌شود
-        if (in_array((int) auth()->id(), $ids, true)) {
-            $ids = array_values(array_diff($ids, [(int) auth()->id()]));
-            $skipped = true;
-            $this->toast('کاربر جاری قابل حذف نیست.', 'warning');
-        }
-
-        if ($ids === []) {
-            return;
-        }
-
-        // آخرین مدیر سیستم حذف نمی‌شود
-        $remainingAdmins = User::query()
-            ->where('role', 'admin')
-            ->whereNotIn('id', $ids)
-            ->count();
-
-        $users = User::query()->whereIn('id', $ids)->get();
-        $deletable = $users->filter(function (User $user) use ($remainingAdmins) {
-            return ! ($user->role === 'admin' && $user->id !== auth()->id() && $remainingAdmins === 0);
-        });
-
-        if ($deletable->count() < $users->count()) {
-            $skipped = true;
-            $this->toast('آخرین مدیر سیستم قابل حذف نیست.', 'warning');
-        }
-
-        $count = 0;
-        $deletable->each(function (User $user) use (&$count) {
-            if ($user->id === (int) auth()->id()) {
-                return; // محض احتیاط
-            }
-            $user->delete();
-            $count++;
-        });
-
-        if ($count > 0) {
-            $this->toast(fa_num($count) . ' کاربر حذف شد.');
-        } elseif (! $skipped) {
-            $this->toast('کاربری برای حذف انتخاب نشده است.', 'warning');
-        }
-    }
-
     public function delete(): void
     {
         $user = User::findOrFail($this->deleteId ?? 0);
@@ -185,14 +112,6 @@ class Index extends Component
         // جلوگیری از حذف خودتان
         if ($user->id === auth()->id()) {
             $this->toast('شما نمی‌توانید حساب کاربری خودتان را حذف کنید.', 'error');
-            $this->deleteId = null;
-
-            return;
-        }
-
-        // جلوگیری از حذف آخرین مدیر
-        if ($user->role === 'admin' && User::query()->where('role', 'admin')->count() <= 1) {
-            $this->toast('آخرین مدیر سیستم قابل حذف نیست.', 'error');
             $this->deleteId = null;
 
             return;

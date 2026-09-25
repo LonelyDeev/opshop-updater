@@ -154,22 +154,14 @@
                 @endif
             </x-card>
 
-            {{-- plans (selectable radio cards) --}}
-            <x-card title="طرح‌های قیمت‌گذاری" subtitle="طرح موردنظر را انتخاب کنید">
+            {{-- plans --}}
+            <x-card title="طرح‌های قیمت‌گذاری" subtitle="مقایسه طرح‌ها قبل از خرید">
                 @if($this->plans->isNotEmpty())
-                    <div class="grid grid-cols-1 gap-3">
+                    <div class="space-y-3">
                         @foreach($this->plans as $plan)
-                            @php($selected = (string) $plan->id === $this->planId)
-                            <button type="button" wire:click="$set('planId', '{{ $plan->id }}')"
-                                    class="group relative flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4 text-start ring-1 transition-all
-                                           {{ $selected ? 'bg-brand-50/70 ring-2 ring-brand-500 dark:bg-brand-500/10' : 'bg-zinc-50 ring-zinc-200/80 hover:ring-brand-300 dark:bg-zinc-800/60 dark:ring-zinc-700 dark:hover:ring-brand-500/40' }}">
+                            <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/80 dark:bg-zinc-800/60 dark:ring-zinc-700">
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <span class="flex size-5 shrink-0 items-center justify-center rounded-full ring-1 {{ $selected ? 'bg-brand-600 ring-brand-600' : 'bg-white ring-zinc-300 dark:bg-zinc-800 dark:ring-zinc-600' }}">
-                                            @if($selected)
-                                                <x-icon name="check" class="size-3 text-white" />
-                                            @endif
-                                        </span>
                                         <p class="text-sm font-bold text-zinc-800 dark:text-zinc-100">{{ $plan->name }}</p>
                                         <x-badge variant="info" icon="clock">{{ $plan->duration_label }}</x-badge>
                                         @if($plan->is_one_time)
@@ -190,7 +182,7 @@
                                         <p class="text-sm font-black tabular-nums text-zinc-900 dark:text-zinc-50">{{ money($plan->final_price) }}</p>
                                     @endif
                                 </div>
-                            </button>
+                            </div>
                         @endforeach
                     </div>
                 @else
@@ -203,48 +195,6 @@
                     </p>
                 @endif
             </x-card>
-
-            {{-- related subscription plans --}}
-            @if($this->subscriptionPlansWithThisPackage->count())
-                <div class="relative overflow-hidden rounded-3xl bg-gradient-to-bl from-brand-50 via-white to-teal-50 ring-1 ring-brand-100 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800 dark:ring-zinc-800">
-                    <div class="shop-hero-glow pointer-events-none absolute -top-20 -end-20 size-64 rounded-full opacity-25 blur-3xl" aria-hidden="true"></div>
-                    <div class="relative p-5 sm:p-6">
-                        <div class="flex items-center justify-between gap-3">
-                            <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-zinc-50">
-                                <x-icon name="crown" class="size-5 text-amber-500" />
-                                این پکیج با اشتراک هم رایگان می‌شود
-                            </h3>
-                            <a href="{{ route('shop.subscriptions') }}" wire:navigate class="shrink-0 text-xs font-bold text-brand-600 hover:text-brand-500 dark:text-brand-400">
-                                همه طرح‌ها ←
-                            </a>
-                        </div>
-                        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            @foreach($this->subscriptionPlansWithThisPackage as $plan)
-                                @php($pivot = $plan->packages->first()?->pivot)
-                                <a href="{{ route('shop.subscriptions') }}" wire:navigate
-                                   class="group flex flex-col gap-2 rounded-2xl bg-white/80 p-4 ring-1 ring-zinc-200/70 backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-card dark:bg-zinc-800/70 dark:ring-zinc-700/50">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <span class="flex items-center gap-1.5 text-xs font-black text-zinc-900 dark:text-zinc-50">
-                                            <x-icon name="crown" class="size-3.5 text-amber-500" />
-                                            {{ $plan->name }}
-                                        </span>
-                                    </div>
-                                    <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ $plan->duration_label }} اعتبار</p>
-                                    @if($pivot)
-                                        <span class="inline-flex w-fit items-center gap-1 rounded-lg bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
-                                            <x-icon name="gift" class="size-3" />
-                                            {{ \App\Models\SubscriptionPlan::freeMonthsLabel((int) $pivot->free_months) }}
-                                        </span>
-                                    @endif
-                                    <span class="mt-auto pt-1 text-sm font-black tabular-nums text-zinc-900 dark:text-zinc-50">
-                                        {{ $plan->final_price > 0 ? money($plan->final_price, false) : 'رایگان' }}
-                                    </span>
-                                </a>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-            @endif
         </div>
 
         {{-- RIGHT: checkout --}}
@@ -259,15 +209,6 @@
 
                 {{-- selected plan summary --}}
                 @php($selectedPlan = $this->planId !== '' ? $this->plans->firstWhere('id', (int) $this->planId) : null)
-                @if($selectedPlan)
-                    <div class="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-200/80 dark:bg-zinc-800/60 dark:ring-zinc-700">
-                        <span class="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                            <x-icon name="tag" class="size-4" />
-                            طرح انتخاب‌شده
-                        </span>
-                        <span class="text-sm font-bold text-zinc-800 dark:text-zinc-100">{{ $selectedPlan->name }}</span>
-                    </div>
-                @endif
                 <div class="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-200/80 dark:bg-zinc-800/60 dark:ring-zinc-700">
                     <span class="text-xs text-zinc-500 dark:text-zinc-400">مبلغ قابل پرداخت</span>
                     <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-zinc-50">
@@ -281,10 +222,10 @@
                     </span>
                 </div>
 
-                {{-- plan select (mobile-friendly fallback for changing plan from checkout) --}}
-                @if($this->plans->isNotEmpty() && !$package->is_free && $this->plans->count() > 1)
+                {{-- plan select --}}
+                @if($this->plans->isNotEmpty() && !$package->is_free)
                     @php($planOptions = $this->plans->mapWithKeys(fn ($p) => [$p->id => $p->name . ' · ' . $p->duration_label . ' · ' . ($p->final_price <= 0 ? 'رایگان' : money($p->final_price, false))])->all())
-                    <x-field label="تغییر طرح" for="planId">
+                    <x-field label="طرح قیمت‌گذاری" for="planId" required>
                         <x-select id="planId" wire:model.live="planId" :options="$planOptions" />
                     </x-field>
                 @endif

@@ -26,9 +26,7 @@
                 ['route' => 'admin.licenses.index', 'title' => 'لایسنس‌ها', 'icon' => 'key', 'match' => ['admin.licenses*']],
                 ['route' => 'admin.purchases.index', 'title' => 'خریدها', 'icon' => 'receipt', 'match' => ['admin.purchases*']],
                 ['route' => 'admin.customers.index', 'title' => 'مشتریان', 'icon' => 'users', 'match' => ['admin.customers*']],
-                ['route' => 'admin.subscriptions.index', 'title' => 'اشتراک‌ها', 'icon' => 'ticket', 'match' => ['admin.subscriptions.index']],
-                ['route' => 'admin.plans.index', 'title' => 'طرح‌های اشتراک', 'icon' => 'crown', 'match' => ['admin.plans.index']],
-                ['route' => 'admin.subscriptions.orders', 'title' => 'درخواست‌های اشتراک', 'icon' => 'hourglass', 'match' => ['admin.subscriptions.orders'], 'badge' => \App\Services\SubscriptionService::pendingApprovalsCount()],
+                ['route' => 'admin.subscriptions.index', 'title' => 'اشتراک‌ها', 'icon' => 'ticket', 'match' => ['admin.subscriptions*']],
             ],
         ],
         [
@@ -109,10 +107,6 @@
                                 <x-icon :name="$item['icon']"
                                         class="size-5 shrink-0 transition-transform duration-150 group-hover:scale-110 {{ $active ? 'text-brand-400' : '' }}"/>
                                 <span x-show="! collapsed" x-cloak class="truncate">{{ $item['title'] }}</span>
-                                @if(($item['badge'] ?? 0) > 0)
-                                    <span class="ms-auto flex size-5 shrink-0 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white"
-                                          x-show="! collapsed">{{ fa_num($item['badge']) }}</span>
-                                @endif
                             </a>
                         @endforeach
                     </div>

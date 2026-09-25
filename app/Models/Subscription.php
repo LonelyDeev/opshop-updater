@@ -14,8 +14,6 @@ class Subscription extends Model
     protected $fillable = [
         'customer_id',
         'project_id',
-        'subscription_plan_id',
-        'subscription_order_id',
         'start_date',
         'end_date',
         'expires_at',
@@ -45,18 +43,6 @@ class Subscription extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
-    }
-
-    /** طرح اشتراکی که این رکورد از آن صادر شده (null برای اشتراک‌های پروژه‌ای دستی) */
-    public function plan(): BelongsTo
-    {
-        return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan_id');
-    }
-
-    /** سفارشی که منجر به این اشتراک شد */
-    public function order(): BelongsTo
-    {
-        return $this->belongsTo(SubscriptionOrder::class, 'subscription_order_id');
     }
 
     // محاسبه خودکار مبلغ نهایی قبل از ذخیره

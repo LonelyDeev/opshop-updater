@@ -33,52 +33,11 @@
             <option value="draft">پیش‌نویس</option>
             <option value="archived">آرشیو شده</option>
         </select>
-        <div class="relative sm:w-44">
-            <x-icon name="arrow-up-down" class="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-            <select wire:model.live="sort" class="input ps-10" aria-label="ترتیب نمایش">
-                <option value="newest">جدیدترین</option>
-                <option value="oldest">قدیمی‌ترین</option>
-                <option value="id_desc">شناسه (نزولی)</option>
-                <option value="id_asc">شناسه (صعودی)</option>
-                <option value="name_asc">بر اساس نام</option>
-                <option value="name_desc">بر اساس نام (معکوس)</option>
-                <option value="price_desc">گران‌ترین</option>
-                <option value="price_asc">ارزان‌ترین</option>
-                <option value="downloads_desc">پرمصرف‌ترین</option>
-            </select>
-        </div>
-        <div wire:loading wire:target="search, status, project_id, sort" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
+        <div wire:loading wire:target="search, status, project_id" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
             <x-icon name="loader" class="size-4 animate-spin" />
             در حال فیلتر…
         </div>
     </div>
-
-    {{-- select all + bulk toolbar --}}
-    @if($this->records->count())
-        @if($selectedIds)
-            <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rose-50 p-3 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:ring-rose-400/20">
-                <label class="flex cursor-pointer select-none items-center gap-2 text-sm font-bold text-rose-700 dark:text-rose-400">
-                    <input type="checkbox" class="checkbox" aria-label="انتخاب همه"
-                           @if($this->allPageSelected()) checked @endif
-                           wire:click="toggleSelectAll" />
-                    انتخاب همه
-                </label>
-                <div class="flex flex-wrap items-center gap-2">
-                    <span class="flex items-center gap-2 text-sm font-bold text-rose-700 dark:text-rose-400">
-                        <x-icon name="check-square" class="size-4.5" />
-                        {{ fa_num(count($selectedIds)) }} پکیج انتخاب شده است
-                    </span>
-                    <x-btn variant="secondary" size="sm" wire:click="clearSelection">انصراف از انتخاب</x-btn>
-                    <x-btn variant="danger" icon="trash" size="sm" wire:click="$set('confirmingBulkDelete', true)">حذف گروهی</x-btn>
-                </div>
-            </div>
-        @else
-            <label class="flex cursor-pointer select-none items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                <input type="checkbox" class="checkbox" aria-label="انتخاب همه" wire:click="toggleSelectAll" />
-                انتخاب همه
-            </label>
-        @endif
-    @endif
 
     {{-- card grid --}}
     @if($this->records->count())
@@ -99,21 +58,13 @@
                             </div>
                         @endif
 
-                        {{-- selection checkbox + category + status badges --}}
+                        {{-- category + status badges --}}
                         <div class="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
-                            <div class="flex items-center gap-2">
-                                {{-- موس‌داون هم متوقف شود: wire:navigate روی mousedown لینک شروع می‌شود (نه فقط click) --}}
-                                <label x-data @mousedown.stop @click.stop
-                                       class="z-10 flex cursor-pointer select-none items-center gap-2 rounded-xl bg-white/95 px-2.5 py-1.5 shadow-sm backdrop-blur dark:bg-zinc-900/95">
-                                    <input type="checkbox" class="checkbox" aria-label="انتخاب این پکیج"
-                                           wire:model.live="selectedIds" value="{{ $package->id }}" />
-                                </label>
-                                <span class="inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium text-zinc-700 backdrop-blur-sm"
-                                      style="box-shadow: inset 0 0 0 1px rgb(9 9 11 / 0.08)">
-                                    <x-icon name="tag" class="size-3 text-brand-600" />
-                                    {{ \App\Livewire\Packages\Index::CATEGORIES[$package->category ?? ''] ?? 'سایر' }}
-                                </span>
-                            </div>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium text-zinc-700 backdrop-blur-sm"
+                                  style="box-shadow: inset 0 0 0 1px rgb(9 9 11 / 0.08)">
+                                <x-icon name="tag" class="size-3 text-brand-600" />
+                                {{ \App\Livewire\Packages\Index::CATEGORIES[$package->category] ?? 'سایر' }}
+                            </span>
                             @php($statusVariant = match($package->status) {
                                 'active'   => 'success',
                                 'draft'    => 'warning',
@@ -272,25 +223,6 @@
                 <div class="flex items-center justify-end gap-2">
                     <x-btn variant="secondary" wire:click="$set('deleteId', null)">انصراف</x-btn>
                     <x-btn variant="danger" icon="trash" wire:click="delete" :loading="true">حذف قطعی</x-btn>
-                </div>
-            </div>
-        @endif
-    </x-modal>
-
-    {{-- bulk delete confirm --}}
-    <x-modal wire:model="confirmingBulkDelete" title="حذف گروهی پکیج‌ها" size="sm">
-        @if($confirmingBulkDelete)
-            <div class="space-y-4">
-                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
-                    <x-icon name="trash" class="size-6 shrink-0" />
-                    <p class="text-sm leading-6">
-                        <strong>{{ fa_num(count($selectedIds)) }}</strong> پکیج انتخاب‌شده برای همیشه حذف شود؟
-                        تصویر شاخص، گالری و تمام نسخه‌ها و فایل‌های آن‌ها نیز حذف می‌شوند. این عمل قابل بازگشت نیست.
-                    </p>
-                </div>
-                <div class="flex items-center justify-end gap-2">
-                    <x-btn variant="secondary" wire:click="clearSelection">انصراف</x-btn>
-                    <x-btn variant="danger" icon="trash" wire:click="bulkDelete" :loading="true">حذف {{ fa_num(count($selectedIds)) }} پکیج</x-btn>
                 </div>
             </div>
         @endif

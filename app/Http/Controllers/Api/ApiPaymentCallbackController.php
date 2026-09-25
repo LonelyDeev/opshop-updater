@@ -66,11 +66,10 @@ class ApiPaymentCallbackController extends Controller
      */
     private function isInternalCallback(string $url): bool
     {
-        // هاست + پورت (پورت را هم مقایسه می‌کنیم تا localhost:3001 با localhost:8000 یکی تلقی نشود)
-        $given = [$this->hostWithPort($url), rtrim((string) parse_url($url, PHP_URL_PATH), '/')];
+        $given = [parse_url($url, PHP_URL_HOST), rtrim((string) parse_url($url, PHP_URL_PATH), '/')];
 
         foreach ([route('payment.callback'), route('api.packages.payment.callback')] as $panelUrl) {
-            $panel = [$this->hostWithPort($panelUrl), rtrim((string) parse_url($panelUrl, PHP_URL_PATH), '/')];
+            $panel = [parse_url($panelUrl, PHP_URL_HOST), rtrim((string) parse_url($panelUrl, PHP_URL_PATH), '/')];
 
             if ($given === $panel) {
                 return true;
@@ -78,14 +77,5 @@ class ApiPaymentCallbackController extends Controller
         }
 
         return false;
-    }
-
-    /** هاست به‌همراه پورت (اگر وجود داشته باشد) برای مقایسه‌ی دقیق‌تر callback_url */
-    private function hostWithPort(string $url): string
-    {
-        $host = (string) parse_url($url, PHP_URL_HOST);
-        $port = parse_url($url, PHP_URL_PORT);
-
-        return $port ? $host . ':' . $port : $host;
     }
 }

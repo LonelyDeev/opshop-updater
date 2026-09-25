@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Licenses;
 
-use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Package;
 use App\Models\PackageLicense;
@@ -18,7 +17,7 @@ use Livewire\WithPagination;
 #[Title('لایسنس‌ها')]
 class Index extends Component
 {
-    use WithPagination, WithToasts, WithBulkActions;
+    use WithPagination, WithToasts;
 
     #[Url]
     public string $search = '';
@@ -29,14 +28,7 @@ class Index extends Component
     #[Url]
     public string $package_id = '';
 
-    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، تاریخ انقضا و… */
-    #[Url]
-    public string $sort = 'newest';
-
     public ?int $revokeId = null;
-
-    /** آی‌دی لایسنس برای حذف تکی */
-    public ?int $deleteId = null;
 
     public function updatedSearch(): void
     {
@@ -53,11 +45,6 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function updatedSort(): void
-    {
-        $this->resetPage();
-    }
-
     #[Computed]
     public function records()
     {
@@ -70,12 +57,8 @@ class Index extends Component
                     ->orWhere('phone', 'like', "%{$this->search}%"))))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->package_id, fn ($q) => $q->where('package_id', (int) $this->package_id))
-            ->when($this->sort === 'newest', fn ($q) => $q->latest())
-            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
-            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
-            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
-            ->when($this->sort === 'expires_soon', fn ($q) => $q->orderByRaw('expires_at is null')->orderBy('expires_at'))
-            ->when($this->sort === 'expires_late', fn ($q) => $q->orderByRaw('expires_at is null')->orderByDesc('expires_at'))
+            ->orderByRaw('expires_at is null')
+            ->orderBy('expires_at')
             ->paginate(12);
     }
 
@@ -83,27 +66,6 @@ class Index extends Component
     public function packages()
     {
         return Package::query()->orderBy('name')->get(['id', 'name']);
-    }
-
-    /* ---------------------------------------------------------------- */
-    /*  Bulk selection (WithBulkActions)                                 */
-    /* ---------------------------------------------------------------- */
-
-    public function bulkPageIds(): array
-    {
-        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
-    }
-
-    public function deleteSelectedRecords(): void
-    {
-        $ids = array_map('intval', $this->selectedIds);
-
-        // توکن‌های دانلود مرتبط (FK cascade نیست در برخی ست‌آپ‌ها → دستی برای اطمینان)
-        \App\Models\PackageDownloadToken::whereIn('license_id', $ids)->delete();
-
-        $count = PackageLicense::query()->whereIn('id', $ids)->delete();
-
-        $this->toast(fa_num($count) . ' لایسنس حذف شد.');
     }
 
     /* ---------------------------------------------------------------- */
@@ -127,20 +89,6 @@ class Index extends Component
         $license->update(['status' => PackageLicense::STATUS_ACTIVE]);
 
         $this->toast('لایسنس فعال شد.');
-    }
-
-    /** حذف تکی لایسنس */
-    public function delete(): void
-    {
-        $license = PackageLicense::findOrFail($this->deleteId ?? 0);
-
-        \App\Models\PackageDownloadToken::where('license_id', $license->id)->delete();
-
-        $key = $license->license_key;
-        $license->delete();
-
-        $this->deleteId = null;
-        $this->toast("لایسنس «{$key}» حذف شد.");
     }
 
     public function expireOld(): void

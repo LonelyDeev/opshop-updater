@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Subscriptions;
 
-use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Customer;
 use App\Models\Project;
@@ -19,7 +18,7 @@ use Livewire\WithPagination;
 #[Title('اشتراک‌ها')]
 class Index extends Component
 {
-    use WithPagination, WithToasts, WithBulkActions;
+    use WithPagination, WithToasts;
 
     #[Url]
     public string $search = '';
@@ -32,10 +31,6 @@ class Index extends Component
 
     #[Url]
     public string $project_id = '';
-
-    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، انقضا، تاریخ شروع و… */
-    #[Url]
-    public string $sort = 'newest';
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -68,11 +63,6 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function updatedSort(): void
-    {
-        $this->resetPage();
-    }
-
     #[Computed]
     public function records()
     {
@@ -88,14 +78,7 @@ class Index extends Component
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->customer_id, fn ($q) => $q->where('customer_id', $this->customer_id))
             ->when($this->project_id, fn ($q) => $q->where('project_id', $this->project_id))
-            ->when($this->sort === 'newest', fn ($q) => $q->latest())
-            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
-            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
-            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
-            ->when($this->sort === 'expires_soon', fn ($q) => $q->orderByRaw('expires_at is null')->orderBy('expires_at'))
-            ->when($this->sort === 'expires_late', fn ($q) => $q->orderByRaw('expires_at is null')->orderByDesc('expires_at'))
-            ->when($this->sort === 'newest_start', fn ($q) => $q->orderByDesc('start_date'))
-            ->when($this->sort === 'oldest_start', fn ($q) => $q->orderBy('start_date'))
+            ->latest()
             ->paginate(12);
     }
 
@@ -219,24 +202,6 @@ class Index extends Component
 
         $this->extendId = null;
         $this->toast('اشتراک تا ' . fa_num(verta_date($newExpiry)) . ' تمدید شد.');
-    }
-
-    /* ---------------------------------------------------------------- */
-    /*  Bulk selection (WithBulkActions)                                 */
-    /* ---------------------------------------------------------------- */
-
-    public function bulkPageIds(): array
-    {
-        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
-    }
-
-    public function deleteSelectedRecords(): void
-    {
-        $ids = array_map('intval', $this->selectedIds);
-
-        $count = Subscription::query()->whereIn('id', $ids)->delete();
-
-        $this->toast(fa_num($count) . ' اشتراک حذف شد.');
     }
 
     public function delete(): void

@@ -11,7 +11,7 @@
     </div>
 
     {{-- stats --}}
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         @foreach($this->stats as $stat)
             <x-stat :label="$stat['label']" :value="fa_num($stat['value'])" :icon="$stat['icon']"
                     :variant="$stat['variant']" :hint="$stat['hint']" :href="$stat['href']" />

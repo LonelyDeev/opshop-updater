@@ -4,19 +4,10 @@ use App\Http\Controllers\Api\UpdateController;
 use App\Http\Controllers\Api\ApiPackageController;
 use App\Http\Controllers\Api\ApiPaymentCallbackController;
 use App\Http\Controllers\Api\ApiPackageDownloadController;
-use App\Http\Controllers\Api\ApiSubscriptionController;
 Route::prefix('v1')->name('api.')->group(function () {
 
     Route::get('/check-update', [UpdateController::class, 'check'])->name('update.check');
     Route::get('/download-update/{updateId}', [UpdateController::class, 'download'])->name('update.download');
-
-    // --- طرح‌های اشتراک (Subscription Plans) ---
-    Route::name('subscriptions.')->group(function () {
-        Route::get('/subscription-plans', [ApiSubscriptionController::class, 'index'])->name('plans.index');
-        Route::post('/subscription-plans/{slug}/purchase', [ApiSubscriptionController::class, 'purchase'])->name('plans.purchase');
-        Route::post('/subscriptions/payments/{transactionId}/verify', [ApiSubscriptionController::class, 'verifyPayment'])->name('payments.verify');
-        Route::get('/my-subscriptions', [ApiSubscriptionController::class, 'mySubscriptions'])->name('mine');
-    });
 
     Route::name('packages.')->group(function () {
 

@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Logs;
 
-use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
@@ -18,7 +17,7 @@ use Livewire\WithPagination;
 #[Title('لاگ‌های سیستم')]
 class Index extends Component
 {
-    use WithPagination, WithToasts, WithBulkActions;
+    use WithPagination, WithToasts;
 
     #[Url]
     public string $search = '';
@@ -27,14 +26,7 @@ class Index extends Component
     #[Url]
     public string $level = '';
 
-    /** فیلتر نمایش/ترتیب: جدیدترین (پیش‌فرض)، قدیمی‌ترین، بر اساس سطح */
-    #[Url]
-    public string $sort = 'newest';
-
     public bool $confirmClear = false;
-
-    /** کلید ورودی برای حذف تکی (اندیس در آرایه‌ی parsed) */
-    public ?int $deleteKey = null;
 
     /** تعداد رکورد در هر صفحه */
     protected const PER_PAGE = 25;
@@ -52,11 +44,6 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function updatedSort(): void
-    {
-        $this->resetPage();
-    }
-
     public function resetFilters(): void
     {
         $this->reset('search', 'level');
@@ -67,47 +54,35 @@ class Index extends Component
     /*  Data                                                             */
     /* ---------------------------------------------------------------- */
 
-    /**
-     * ورودی‌های فیلتر/جستجو/مرتب‌شده — کلید هر آیتم = اندیس همان ورودی در parsed()
-     * (حذف ورودی‌ها با همین کلیدها انجام می‌شود، پس نباید re-index شوند).
-     */
     #[Computed]
     public function records(): LengthAwarePaginator
     {
         $entries = $this->parsed();
 
-        // فیلتر بر اساس سطح (array_filter کلیدها را حفظ می‌کند)
+        // فیلتر بر اساس سطح
         if ($this->level !== '') {
-            $entries = array_filter(
+            $entries = array_values(array_filter(
                 $entries,
                 fn (array $entry) => strtolower($entry['level']) === strtolower($this->level)
-            );
+            ));
         }
 
         // جستجو در تاریخ، سطح و متن پیام
         if ($this->search !== '') {
             $needle = strtolower(trim(en_num($this->search)));
-            $entries = array_filter($entries, function (array $entry) use ($needle) {
+            $entries = array_values(array_filter($entries, function (array $entry) use ($needle) {
                 $haystack = strtolower(
                     $entry['date'].' '.$entry['level'].' '.$entry['message'].' '.($entry['context'] ?? '')
                 );
 
                 return str_contains($haystack, $needle);
-            });
+            }));
         }
 
-        // ترتیب نمایش (کلیدها همچنان به parsed اشاره می‌کنند)
-        if ($this->sort === 'oldest') {
-            $entries = array_reverse($entries, true);
-        } elseif ($this->sort === 'level') {
-            uasort($entries, fn (array $a, array $b) => strcasecmp($a['level'], $b['level']));
-        }
-        // «newest» = ترتیب پیش‌فرض (جدیدترین اول)
-
-        // صفحه‌بندی دستی (مجموعه فایل‌محور) — preserve_keys برای پایداری کلیدها
+        // صفحه‌بندی دستی (مجموعه فایل‌محور)
         $page = max((int) LengthAwarePaginator::resolveCurrentPage(), 1);
         $perPage = static::PER_PAGE;
-        $items = array_slice($entries, ($page - 1) * $perPage, $perPage, true);
+        $items = array_slice($entries, ($page - 1) * $perPage, $perPage);
 
         return new LengthAwarePaginator($items, count($entries), $perPage, $page, [
             'path' => Paginator::resolveCurrentPath(),
@@ -167,74 +142,6 @@ class Index extends Component
         $this->toast('لاگ‌ها با موفقیت پاک شدند.');
     }
 
-    /* ---------------------------------------------------------------- */
-    /*  Bulk selection (WithBulkActions)                                 */
-    /* ---------------------------------------------------------------- */
-
-    /** کلید ردیف‌های صفحه‌ی جاری (اندیس‌های آرایه‌ی parsed به‌صورت رشته) */
-    public function bulkPageIds(): array
-    {
-        return array_map('strval', array_keys($this->records->items()));
-    }
-
-    public function deleteSelectedRecords(): void
-    {
-        $this->deleteLogEntries($this->selectedIds);
-    }
-
-    /** حذف تکی ورودی لاگ (کلید = اندیس در parsed) */
-    public function delete(): void
-    {
-        if ($this->deleteKey === null) {
-            return;
-        }
-
-        $this->deleteLogEntries([(string) $this->deleteKey]);
-        $this->deleteKey = null;
-    }
-
-    /**
-     * حذف چند ورودی از فایل لاگ بر اساس کلید (اندیس در parsed).
-     * فایل دوباره parse می‌شود، ورودی‌ها حذف و بقیه با همان قالب اصلی
-     * ([تاریخ] env.LEVEL: پیام + کانتکست، خط خالی بین ورودی‌ها) بازنویسی می‌شوند.
-     *
-     * @param  array<int, string>  $keys
-     */
-    public function deleteLogEntries(array $keys): void
-    {
-        $keys = array_values(array_unique(array_map('intval', $keys)));
-
-        if ($keys === []) {
-            return;
-        }
-
-        $entries = $this->parsed();
-
-        $remaining = array_filter(
-            $entries,
-            fn (array $entry, int $key) => ! in_array($key, $keys, true),
-            ARRAY_FILTER_USE_BOTH
-        );
-
-        // بازسازی فایل در ترتیب اصلی (قدیمی → جدید) با خط خالی بین ورودی‌ها
-        $blocks = [];
-        foreach (array_reverse(array_values($remaining)) as $entry) {
-            $block = "[{$entry['date']}] {$entry['env']}.{$entry['level']}: {$entry['message']}";
-            if (($entry['context'] ?? '') !== '') {
-                $block .= "\n{$entry['context']}";
-            }
-            $blocks[] = $block;
-        }
-
-        File::put($this->logPath(), $blocks === [] ? '' : implode("\n\n", $blocks) . "\n");
-
-        $this->parsedCache = null;
-        unset($this->records, $this->levels, $this->fileSize);
-        $this->resetPage();
-
-        $this->toast(fa_num(count($keys)) . ' ورودی لاگ حذف شد.');
-    }
-
     public function render()
     {
         return view('livewire.logs.index');
@@ -281,8 +188,7 @@ class Index extends Component
 
             $logs[] = [
                 'date' => $match[1],
-                // [تاریخ] environment.ERROR: ← گروه ۲ = محیط، گروه ۳ = سطح لاگ
-                'env' => $match[2],
+                // [تاریخ] environment.ERROR: ← گروه ۳ = سطح لاگ
                 'level' => $match[3],
                 'message' => (string) array_shift($lines),
                 'context' => trim(implode("\n", $lines)),

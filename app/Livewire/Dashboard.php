@@ -9,8 +9,6 @@ use App\Models\PackageLicense;
 use App\Models\PackagePurchase;
 use App\Models\Project;
 use App\Models\Subscription;
-use App\Models\SubscriptionOrder;
-use App\Models\SubscriptionPlan;
 use App\Models\Update;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -78,16 +76,6 @@ class Dashboard extends Component
                 'variant' => 'neutral',
                 'hint' => Subscription::count() . ' کل',
                 'href' => route('admin.subscriptions.index'),
-            ],
-            [
-                'label' => 'درخواست‌های اشتراک',
-                'value' => SubscriptionOrder::where('admin_status', SubscriptionOrder::ADMIN_STATUS_PENDING)
-                    ->where('status', SubscriptionOrder::STATUS_PAID)
-                    ->count(),
-                'icon' => 'hourglass',
-                'variant' => 'warning',
-                'hint' => fa_num(SubscriptionPlan::where('is_active', true)->count()) . ' طرح فعال',
-                'href' => route('admin.subscriptions.orders'),
             ],
             [
                 'label' => 'کاربران پنل',

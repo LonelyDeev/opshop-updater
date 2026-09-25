@@ -32,36 +32,11 @@
                 <option value="{{ $project->id }}">{{ $project->name }}</option>
             @endforeach
         </select>
-        <div class="relative lg:w-44">
-            <x-icon name="arrow-up-down" class="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-            <select wire:model.live="sort" class="input ps-10" aria-label="ترتیب نمایش">
-                <option value="newest">جدیدترین</option>
-                <option value="oldest">قدیمی‌ترین</option>
-                <option value="id_desc">شناسه (نزولی)</option>
-                <option value="id_asc">شناسه (صعودی)</option>
-                <option value="release_newest">بر اساس تاریخ انتشار - جدیدترین</option>
-                <option value="release_oldest">بر اساس تاریخ انتشار - قدیمی‌ترین</option>
-            </select>
-        </div>
-        <div wire:loading wire:target="search, status, type, project_id, sort" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
+        <div wire:loading wire:target="search, status, type, project_id" class="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
             <x-icon name="loader" class="size-4 animate-spin" />
             در حال فیلتر…
         </div>
     </div>
-
-    {{-- bulk toolbar --}}
-    @if($selectedIds)
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rose-50 p-3 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:ring-rose-400/20">
-            <div class="flex items-center gap-2 text-sm font-bold text-rose-700 dark:text-rose-400">
-                <x-icon name="check-square" class="size-4.5" />
-                {{ fa_num(count($selectedIds)) }} آپدیت انتخاب شده است
-            </div>
-            <div class="flex items-center gap-2">
-                <x-btn variant="secondary" size="sm" wire:click="clearSelection">انصراف از انتخاب</x-btn>
-                <x-btn variant="danger" icon="trash" size="sm" wire:click="$set('confirmingBulkDelete', true)">حذف گروهی</x-btn>
-            </div>
-        </div>
-    @endif
 
     {{-- table --}}
     <div class="card overflow-hidden">
@@ -70,11 +45,6 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th class="w-10">
-                                <input type="checkbox" class="checkbox" aria-label="انتخاب همه"
-                                       @if($this->allPageSelected()) checked @endif
-                                       wire:click="toggleSelectAll" />
-                            </th>
                             <th>آپدیت</th>
                             <th class="hidden md:table-cell">پروژه</th>
                             <th class="hidden lg:table-cell">نوع</th>
@@ -88,10 +58,6 @@
                     <tbody>
                         @foreach($this->records as $record)
                             <tr wire:key="update-{{ $record->id }}">
-                                <td>
-                                    <input type="checkbox" class="checkbox" aria-label="انتخاب این آپدیت"
-                                           wire:model.live="selectedIds" value="{{ $record->id }}" />
-                                </td>
                                 <td>
                                     <div class="flex items-center gap-3">
                                         <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
@@ -275,25 +241,6 @@
                 <div class="flex items-center justify-end gap-2">
                     <x-btn variant="secondary" wire:click="$set('deleteId', null)">انصراف</x-btn>
                     <x-btn variant="danger" icon="trash" wire:click="delete" :loading="true">حذف قطعی</x-btn>
-                </div>
-            </div>
-        @endif
-    </x-modal>
-
-    {{-- bulk delete confirm --}}
-    <x-modal wire:model="confirmingBulkDelete" title="حذف گروهی آپدیت‌ها" size="sm">
-        @if($confirmingBulkDelete)
-            <div class="space-y-4">
-                <div class="flex items-center gap-3 rounded-xl bg-rose-50 p-4 text-rose-700 ring-1 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20">
-                    <x-icon name="trash" class="size-6 shrink-0" />
-                    <p class="text-sm leading-6">
-                        <strong>{{ fa_num(count($selectedIds)) }}</strong> آپدیت انتخاب‌شده برای همیشه حذف شود؟
-                        در صورت وجود، فایل پیوست هر آپدیت نیز از دیسک حذف می‌شود. این عمل قابل بازگشت نیست.
-                    </p>
-                </div>
-                <div class="flex items-center justify-end gap-2">
-                    <x-btn variant="secondary" wire:click="clearSelection">انصراف</x-btn>
-                    <x-btn variant="danger" icon="trash" wire:click="bulkDelete" :loading="true">حذف {{ fa_num(count($selectedIds)) }} آپدیت</x-btn>
                 </div>
             </div>
         @endif

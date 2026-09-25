@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Projects;
 
-use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Project;
 use Livewire\Attributes\Computed;
@@ -17,17 +16,13 @@ use Illuminate\Support\Str;
 #[Title('پروژه‌ها')]
 class Index extends Component
 {
-    use WithPagination, WithToasts, WithBulkActions;
+    use WithPagination, WithToasts;
 
     #[Url]
     public string $search = '';
 
     #[Url]
     public string $status = '';
-
-    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، نام و… */
-    #[Url]
-    public string $sort = 'newest';
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -46,11 +41,6 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function updatedSort(): void
-    {
-        $this->resetPage();
-    }
-
     #[Computed]
     public function records()
     {
@@ -60,66 +50,8 @@ class Index extends Component
                 ->where('name', 'like', "%{$this->search}%")
                 ->orWhere('slug', 'like', "%{$this->search}%")))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
-            ->when($this->sort === 'newest', fn ($q) => $q->latest())
-            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
-            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
-            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
-            ->when($this->sort === 'name_asc', fn ($q) => $q->orderBy('name'))
-            ->when($this->sort === 'name_desc', fn ($q) => $q->orderByDesc('name'))
+            ->latest()
             ->paginate(12);
-    }
-
-    /* ---------------------------------------------------------------- */
-    /*  Bulk selection (WithBulkActions)                                 */
-    /* ---------------------------------------------------------------- */
-
-    public function bulkPageIds(): array
-    {
-        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
-    }
-
-    public function deleteSelectedRecords(): void
-    {
-        $ids = array_map('intval', $this->selectedIds);
-
-        $projects = Project::query()
-            ->withCount(['updates', 'packages'])
-            ->whereIn('id', $ids)
-            ->get();
-
-        $deleted = 0;
-        $skipped = 0;
-
-        foreach ($projects as $project) {
-            // پروژه‌ای که آپدیت یا پکیج دارد حذف نمی‌شود (مثل حذف تکی)
-            if ($project->updates_count > 0 || $project->packages_count > 0) {
-                $skipped++;
-
-                continue;
-            }
-
-            try {
-                $project->delete();
-                $deleted++;
-            } catch (\Throwable) {
-                $skipped++;
-            }
-        }
-
-        if ($deleted === 0) {
-            $this->toast('هیچ پروژه‌ای حذف نشد؛ پروژه‌های دارای آپدیت یا پکیج قابل حذف نیستند.', 'warning');
-
-            return;
-        }
-
-        $message = fa_num($deleted) . ' پروژه حذف شد.';
-
-        if ($skipped > 0) {
-            $message .= ' ' . fa_num($skipped) . ' پروژه به دلیل داشتن آپدیت یا پکیج حذف نشد.';
-            $this->toast($message, 'warning');
-        } else {
-            $this->toast($message);
-        }
     }
 
     /* ---------------------------------------------------------------- */

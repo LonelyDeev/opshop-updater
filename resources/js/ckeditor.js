@@ -82,6 +82,9 @@ document.addEventListener('alpine:init', () => {
                 contentsLangDirection: 'rtl',
                 height: 300,
                 entities: false,
+                /* Keep raw HTML (typed in Source mode) intact instead of
+                   stripping tags/attributes on wysiwyg⇄source round-trips */
+                allowedContent: true,
                 toolbar: [
                     { name: 'clipboard', items: ['Cut', 'Copy', 'Paste', 'PasteText', 'PasteFromWord', '-', 'Undo', 'Redo'] },
                     { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline', 'Strike', 'RemoveFormat'] },
@@ -97,8 +100,23 @@ document.addEventListener('alpine:init', () => {
 
             this.instance.setData(textarea.value || '');
             this.instance.on('change', () => this.sync());
-            this.instance.on('blur', () => this.sync());
-            this.instance.on('saveSnapshot', () => this.sync());
+
+            /* ⭐ CKEditor 4 does NOT fire the "change" event while editing
+               in Source mode (sourcearea) — typing raw HTML there never
+               reached the Livewire model and arrived EMPTY on the server.
+               Fix: watch mode switches; when Source opens, bind directly to
+               the underlying .cke_source textarea; when switching back to
+               WYSIWYG, force one final sync. */
+            this.instance.on('mode', () => {
+                if (!this.instance) return;
+                if (this.instance.mode === 'source') {
+                    this.attachSourceSync();
+                } else {
+                    this.sync();
+                }
+            });
+            this.attachSourceSync();
+
             /* server → editor sync (openEdit/openCreate morph the marker div
                OUTSIDE wire:ignore). Livewire 3 has no DOM "livewire:morphed"
                browser event — the JS hook API is the equivalent … */
@@ -120,18 +138,30 @@ document.addEventListener('alpine:init', () => {
             return document.querySelector(`[data-editor-model="${model}"][data-editor-value]`);
         },
 
+        /* Bind input/blur listeners on CKEditor 4's Source-mode textarea
+           (.cke_source) so every keystroke/paste syncs to the Livewire
+           property — the editor's own "change" event stays silent there. */
+        attachSourceSync() {
+            setTimeout(() => {
+                if (!this.instance || this.instance.mode !== 'source') return;
+                const shell = this.$el;
+                const source =
+                    shell?.querySelector('textarea.cke_source') ||
+                    this.instance?.container?.$?.querySelector?.('textarea.cke_source');
+                if (!source || source.dataset.ckSynced) return;
+                source.dataset.ckSynced = '1';
+                for (const ev of ['input', 'change', 'blur']) {
+                    source.addEventListener(ev, () => this.sync());
+                }
+            }, 0);
+        },
+
         /* editor → Livewire property (textarea + input event for wire:model) */
         sync() {
             if (this.syncing || !this.instance) return;
-
-            const value = this.instance.getData();
             const textarea = this.$refs.target;
-            textarea.value = value;
+            textarea.value = this.instance.getData();
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
-            // مستقیم هم بفرست تا مطمئن باشی
-            if (typeof this.$wire?.set === 'function') {
-                this.$wire.set(model, value);
-            }
         },
 
         /* marker div carries the fresh server value. Only apply it when the
