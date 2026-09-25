@@ -37,8 +37,12 @@ class ImageUploadService
             mkdir($destinationPath, 0755, true);
         }
 
-        // ذخیره فایل در پوشه public
-        $file->move($destinationPath, $filename);
+        $target = $destinationPath . DIRECTORY_SEPARATOR . $filename;
+
+        if (!@copy($file->getRealPath(), $target)) {
+            throw new RuntimeException('خطا در ذخیره تصویر شاخص.');
+        }
+
 
         // مسیر نسبی برای ذخیره در دیتابیس
         $path = self::THUMBNAIL_DIR . '/' . $filename;
