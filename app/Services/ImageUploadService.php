@@ -36,9 +36,11 @@ class ImageUploadService
         if (!file_exists($destinationPath)) {
             mkdir($destinationPath, 0755, true);
         }
-
-        // ذخیره فایل در پوشه public
-        $file->move($destinationPath, $filename);
+        $target = $destinationPath . DIRECTORY_SEPARATOR . $filename;
+        // ✅ move() با فایل‌های موقت Livewire کار نمی‌کند؛ از getRealPath() کپی کن
+        if (!@copy($file->getRealPath(), $target)) {
+            throw new RuntimeException('خطا در ذخیره تصویر شاخص.');
+        }
 
         // مسیر نسبی برای ذخیره در دیتابیس
         $path = self::THUMBNAIL_DIR . '/' . $filename;
