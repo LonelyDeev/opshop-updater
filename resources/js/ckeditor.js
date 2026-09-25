@@ -97,7 +97,8 @@ document.addEventListener('alpine:init', () => {
 
             this.instance.setData(textarea.value || '');
             this.instance.on('change', () => this.sync());
-
+            this.instance.on('blur', () => this.sync());
+            this.instance.on('saveSnapshot', () => this.sync());
             /* server → editor sync (openEdit/openCreate morph the marker div
                OUTSIDE wire:ignore). Livewire 3 has no DOM "livewire:morphed"
                browser event — the JS hook API is the equivalent … */
@@ -122,9 +123,15 @@ document.addEventListener('alpine:init', () => {
         /* editor → Livewire property (textarea + input event for wire:model) */
         sync() {
             if (this.syncing || !this.instance) return;
+
+            const value = this.instance.getData();
             const textarea = this.$refs.target;
-            textarea.value = this.instance.getData();
+            textarea.value = value;
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            // مستقیم هم بفرست تا مطمئن باشی
+            if (typeof this.$wire?.set === 'function') {
+                this.$wire.set(model, value);
+            }
         },
 
         /* marker div carries the fresh server value. Only apply it when the
