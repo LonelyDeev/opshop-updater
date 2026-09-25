@@ -36,7 +36,7 @@
     </section>
 
     {{-- ============ Stats ============ --}}
-    <section class="mx-auto -mt-8 flex w-full max-w-7xl flex-wrap items-center justify-center gap-4 px-4 sm:justify-start sm:px-6">
+    <section class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-center gap-4 px-4 sm:justify-start sm:px-6">
         <x-stat label="پکیج فعال" :value="fa_num($this->stats['packages'])" icon="package" variant="primary" />
         <x-stat label="نسخه فعال" :value="fa_num($this->stats['versions'])" icon="layers" variant="info" />
         <x-stat label="طرح اشتراک فعال" :value="fa_num($this->stats['plans'])" icon="crown" variant="warning" />
