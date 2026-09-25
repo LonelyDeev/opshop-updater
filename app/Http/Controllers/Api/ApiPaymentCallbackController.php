@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PackagePurchase;
+use App\Models\SubscriptionRequest;
 use App\Services\LicenseService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
@@ -36,6 +37,24 @@ class ApiPaymentCallbackController extends Controller
         if (!$transactionId) {
             return redirect()->route('shop.home')
                 ->with('error', 'اطلاعات تراکنش ناقص است.');
+        }
+
+        /* ---------- درخواست‌های اشتراک (طرح‌های اشتراک) ---------- */
+        $subscription = SubscriptionRequest::where('transaction_id', $transactionId)->first();
+
+        if ($subscription) {
+            $this->paymentService->verifyPayment($transactionId);
+            $subscription->refresh();
+
+            // صفحه‌ی نتیجه + شمارش معکوس برای بازگشت به فروشگاه
+            if ($subscription->callback_url && !$this->isInternalCallback($subscription->callback_url)) {
+                return redirect()->route('payment.return', array_merge($request->query(), [
+                    'purchase' => $subscription->id,
+                ]));
+            }
+
+            return redirect()->route('shop.subscription.status', $subscription->id)
+                ->with('info', 'وضعیت درخواست شما به‌روزرسانی شد.');
         }
 
         $purchase = PackagePurchase::where('transaction_id', $transactionId)->first();

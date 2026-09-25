@@ -9,6 +9,11 @@ Route::prefix('v1')->name('api.')->group(function () {
     Route::get('/check-update', [UpdateController::class, 'check'])->name('update.check');
     Route::get('/download-update/{updateId}', [UpdateController::class, 'download'])->name('update.download');
 
+    // --- طرح‌های اشتراک (Subscription Plans) ---
+    Route::get('/plans', [\App\Http\Controllers\Api\ApiSubscriptionPlanController::class, 'index'])->name('plans.index');
+    Route::post('/plans/{plan}/purchase', [\App\Http\Controllers\Api\ApiSubscriptionPlanController::class, 'purchase'])->name('plans.purchase');
+    Route::get('/subscription-requests/{request}', [\App\Http\Controllers\Api\ApiSubscriptionPlanController::class, 'requestStatus'])->name('plans.request-status');
+
     Route::name('packages.')->group(function () {
 
 

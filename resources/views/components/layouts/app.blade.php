@@ -26,7 +26,14 @@
                 ['route' => 'admin.licenses.index', 'title' => 'لایسنس‌ها', 'icon' => 'key', 'match' => ['admin.licenses*']],
                 ['route' => 'admin.purchases.index', 'title' => 'خریدها', 'icon' => 'receipt', 'match' => ['admin.purchases*']],
                 ['route' => 'admin.customers.index', 'title' => 'مشتریان', 'icon' => 'users', 'match' => ['admin.customers*']],
-                ['route' => 'admin.subscriptions.index', 'title' => 'اشتراک‌ها', 'icon' => 'ticket', 'match' => ['admin.subscriptions*']],
+                ['route' => 'admin.subscriptions.index', 'title' => 'اشتراک‌های پروژه', 'icon' => 'ticket', 'match' => ['admin.subscriptions*']],
+            ],
+        ],
+        [
+            'label' => 'طرح‌های اشتراک',
+            'items' => [
+                ['route' => 'admin.subscription-plans.index', 'title' => 'پلن‌ها و طرح‌ها', 'icon' => 'crown', 'match' => ['admin.subscription-plans*']],
+                ['route' => 'admin.subscription-requests.index', 'title' => 'درخواست‌ها و تأییدها', 'icon' => 'clipboard-check', 'match' => ['admin.subscription-requests*']],
             ],
         ],
         [

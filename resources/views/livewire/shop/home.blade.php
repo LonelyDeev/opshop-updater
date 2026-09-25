@@ -30,6 +30,33 @@
         </div>
     </section>
 
+    {{-- ============ Subscription plans CTA ============ --}}
+    <section class="mx-auto w-full max-w-7xl px-4 sm:px-6">
+        <a href="{{ route('shop.plans') }}" wire:navigate
+           class="shop-hero group relative flex items-center gap-4 overflow-hidden rounded-2xl p-5 shadow-card ring-1 ring-white/10 transition-all hover:shadow-card-lg sm:p-6">
+            {{-- decorative glow --}}
+            <div class="pointer-events-none absolute inset-0" aria-hidden="true">
+                <div class="shop-hero-glow absolute -top-24 -end-16 size-64 rounded-full opacity-40 blur-3xl"></div>
+            </div>
+
+            <span class="relative flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-white ring-1 ring-white/25">
+                <x-icon name="crown" class="size-6" />
+            </span>
+
+            <div class="relative min-w-0 flex-1">
+                <p class="text-sm font-black text-white sm:text-base">طرح‌های اشتراک</p>
+                <p class="mt-0.5 text-xs leading-5 text-teal-50/80">
+                    دسترسی به چندین پکیج با یک خرید — طرح‌های ماهانه تا دائمی با لایسنس اختصاصی
+                </p>
+            </div>
+
+            <span class="relative hidden items-center gap-1.5 rounded-xl bg-white/15 px-3.5 py-2 text-xs font-bold text-white ring-1 ring-white/20 transition-colors group-hover:bg-white/25 sm:inline-flex">
+                مشاهده طرح‌ها
+                <x-icon name="arrow-left" class="size-3.5 transition-transform group-hover:-translate-x-1" />
+            </span>
+        </a>
+    </section>
+
     {{-- ============ Stats ============ --}}
     <section class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-center gap-4 px-4 sm:justify-start sm:px-6">
         <x-stat label="پکیج فعال" :value="fa_num($this->stats['packages'])" icon="package" variant="primary" />

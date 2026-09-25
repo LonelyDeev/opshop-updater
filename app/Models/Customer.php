@@ -30,6 +30,12 @@ class Customer extends Model
         return $this->hasMany(Subscription::class);
     }
 
+    // درخواست‌های خرید طرح اشتراک
+    public function subscriptionRequests(): HasMany
+    {
+        return $this->hasMany(SubscriptionRequest::class);
+    }
+
     // تولید کد آپدیت در صورت نیاز
     protected static function boot()
     {

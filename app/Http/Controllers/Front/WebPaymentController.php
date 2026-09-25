@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
 use App\Models\PackagePurchase;
+use App\Models\SubscriptionRequest;
 use App\Services\PaymentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,10 @@ use Illuminate\Http\Request;
  *  - خریدهای API (callback_url بیرونی) → صفحه‌ی «نتیجه پرداخت» (payment/return)
  *    تا وضعیت + شمارش معکوس ۱۰ ثانیه‌ای نمایش داده شود و سپس به فروشگاه برگردد.
  *  - خریدهای ویترین خود پنل → صفحه‌ی نتیجه‌ی خود پنل (payment/result) مانند قبل.
+ *
+ * درخواست‌های اشتراک (طرح‌ها):
+ *  - با callback_url بیرونی → payment/return (همان جریان، با پیام در انتظار تأیید مدیر)
+ *  - خرید از ویترین خود پنل → صفحه وضعیت درخواست اشتراک
  */
 class WebPaymentController extends Controller
 {
@@ -41,6 +46,27 @@ class WebPaymentController extends Controller
                 ->with('error', 'اطلاعات تراکنش ناقص است.');
         }
 
+        /* ---------- درخواست‌های اشتراک (طرح‌های اشتراک) ---------- */
+        $subscription = SubscriptionRequest::where('transaction_id', $transactionId)->first();
+
+        if ($subscription) {
+            $this->paymentService->verifyPayment($transactionId);
+            $subscription->refresh();
+
+            // خرید API: صفحه نتیجه + شمارش معکوس، سپس بازگشت به فروشگاه
+            if ($subscription->callback_url && !$this->isInternalCallback($subscription->callback_url)) {
+                return redirect()->route('payment.return', array_merge($request->query(), [
+                    'purchase' => $subscription->id,
+                ]));
+            }
+
+            // خرید ویترین خود پنل → صفحه وضعیت درخواست
+            return redirect()
+                ->route('shop.subscription.status', $subscription->id)
+                ->with('info', 'وضعیت درخواست شما به‌روزرسانی شد.');
+        }
+
+        /* ---------- خریدهای پکیج (جریان قبلی) ---------- */
         $purchase = PackagePurchase::where('transaction_id', $transactionId)->first();
 
         if (!$purchase) {

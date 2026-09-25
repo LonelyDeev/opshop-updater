@@ -99,12 +99,14 @@
             </div>
         </div>
         <div class="gw-body">
+            @if ($package ?? null)
+                <div class="gw-row">
+                    <span class="k">پکیج</span>
+                    <span class="v">{{ $package?->name ?? '-' }}</span>
+                </div>
+            @endif
             <div class="gw-row">
-                <span class="k">پکیج</span>
-                <span class="v">{{ $package?->name ?? '-' }}</span>
-            </div>
-            <div class="gw-row">
-                <span class="k">طرح</span>
+                <span class="k">{{ ($package ?? null) ? 'طرح' : 'طرح اشتراک' }}</span>
                 <span class="v">{{ $plan?->name ?? '-' }}</span>
             </div>
             <div class="gw-row">

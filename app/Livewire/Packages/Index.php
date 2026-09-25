@@ -29,11 +29,22 @@ class Index extends Component
     #[Url]
     public string $project_id = '';
 
+    /** مرتب‌سازی — پیش‌فرض همان ترتیب قبلی صفحه (جدیدترین) است */
+    #[Url]
+    public string $sort = 'newest';
+
     public bool $showModal = false;
 
     public ?int $editingId = null;
 
     public ?int $deleteId = null;
+
+    /** @var array<int,int> */
+    public array $selected = [];
+
+    public bool $selectAll = false;
+
+    public bool $showBulkModal = false;
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -64,6 +75,11 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function updatedSort(): void
+    {
+        $this->resetPage();
+    }
+
     #[Computed]
     public function records()
     {
@@ -75,7 +91,11 @@ class Index extends Component
                 ->orWhere('slug', 'like', "%{$this->search}%")))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->project_id !== '', fn ($q) => $q->where('project_id', (int) $this->project_id))
-            ->latest()
+            ->when($this->sort === 'newest', fn ($q) => $q->latest())
+            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
+            ->when($this->sort === 'name_asc', fn ($q) => $q->orderBy('name'))
+            ->when($this->sort === 'downloads_desc', fn ($q) => $q->orderByDesc('downloads_count'))
+            ->when($this->sort === 'purchases_desc', fn ($q) => $q->orderByDesc('purchases_count'))
             ->paginate(12);
     }
 
@@ -162,6 +182,74 @@ class Index extends Component
     public function delete(): void
     {
         $package = Package::with('images', 'versions')->findOrFail($this->deleteId ?? 0);
+
+        $name = $package->name;
+        $this->deletePackage($package);
+        $this->deleteId = null;
+        $this->toast("پکیج «{$name}» و تمام نسخه‌های آن حذف شد.");
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  حذف چندتایی                                                      */
+    /* ---------------------------------------------------------------- */
+
+    public function updatedSelectAll(bool $value): void
+    {
+        $ids = $this->records()->pluck('id')->all();
+
+        $this->selected = $value
+            ? array_values(array_unique(array_merge($this->selected, $ids)))
+            : array_values(array_diff($this->selected, $ids));
+    }
+
+    public function toggleSelect(int $id): void
+    {
+        $this->selected = in_array($id, $this->selected)
+            ? array_values(array_diff($this->selected, [$id]))
+            : array_values(array_merge($this->selected, [$id]));
+
+        // همگام‌سازی چک‌باکس سربرگ با وضعیت صفحه فعلی
+        $pageIds = $this->records()->pluck('id')->all();
+        $this->selectAll = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selected = [];
+        $this->selectAll = false;
+    }
+
+    public function confirmBulkDelete(): void
+    {
+        if (empty($this->selected)) {
+            return;
+        }
+
+        $this->showBulkModal = true;
+    }
+
+    public function bulkDelete(): void
+    {
+        if (empty($this->selected)) {
+            $this->showBulkModal = false;
+
+            return;
+        }
+
+        $count = 0;
+        foreach (Package::with('images', 'versions')->whereIn('id', $this->selected)->get() as $package) {
+            $this->deletePackage($package);
+            $count++;
+        }
+
+        $this->clearSelection();
+        $this->showBulkModal = false;
+        $this->toast(fa_num($count) . ' پکیج انتخاب‌شده به‌همراه نسخه‌ها و لایسنس‌های آن‌ها حذف شد.');
+    }
+
+    /** حذف کامل پکیج: تصاویر، فایل‌های ZIP نسخه‌ها و خود رکورد */
+    private function deletePackage(Package $package): void
+    {
         $imageService = app(ImageUploadService::class);
 
         // حذف تصویر شاخص و گالری
@@ -175,10 +263,7 @@ class Index extends Component
             }
         }
 
-        $name = $package->name;
         $package->delete();
-        $this->deleteId = null;
-        $this->toast("پکیج «{$name}» و تمام نسخه‌های آن حذف شد.");
     }
 
     /** تبدیل رشته‌های خالی به null تا ولیدیشن nullable درست کار کند. */

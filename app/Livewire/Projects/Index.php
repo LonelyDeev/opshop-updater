@@ -24,6 +24,10 @@ class Index extends Component
     #[Url]
     public string $status = '';
 
+    /** مرتب‌سازی — پیش‌فرض همان ترتیب قبلی صفحه (جدیدترین) است */
+    #[Url]
+    public string $sort = 'newest';
+
     /** @var array<string, mixed> */
     public array $form = [];
 
@@ -31,12 +35,24 @@ class Index extends Component
     public ?int $editingId = null;
     public ?int $deleteId = null;
 
+    /** @var array<int,int> */
+    public array $selected = [];
+
+    public bool $selectAll = false;
+
+    public bool $showBulkModal = false;
+
     public function updatedSearch(): void
     {
         $this->resetPage();
     }
 
     public function updatedStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedSort(): void
     {
         $this->resetPage();
     }
@@ -50,7 +66,9 @@ class Index extends Component
                 ->where('name', 'like', "%{$this->search}%")
                 ->orWhere('slug', 'like', "%{$this->search}%")))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
-            ->latest()
+            ->when($this->sort === 'newest', fn ($q) => $q->latest())
+            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
+            ->when($this->sort === 'name_asc', fn ($q) => $q->orderBy('name'))
             ->paginate(12);
     }
 
@@ -109,6 +127,77 @@ class Index extends Component
         $project->delete();
         $this->deleteId = null;
         $this->toast("پروژه «{$name}» حذف شد.");
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  حذف چندتایی                                                      */
+    /* ---------------------------------------------------------------- */
+
+    public function updatedSelectAll(bool $value): void
+    {
+        $ids = $this->records()->pluck('id')->all();
+
+        $this->selected = $value
+            ? array_values(array_unique(array_merge($this->selected, $ids)))
+            : array_values(array_diff($this->selected, $ids));
+    }
+
+    public function toggleSelect(int $id): void
+    {
+        $this->selected = in_array($id, $this->selected)
+            ? array_values(array_diff($this->selected, [$id]))
+            : array_values(array_merge($this->selected, [$id]));
+
+        // همگام‌سازی چک‌باکس سربرگ با وضعیت صفحه فعلی
+        $pageIds = $this->records()->pluck('id')->all();
+        $this->selectAll = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selected = [];
+        $this->selectAll = false;
+    }
+
+    public function confirmBulkDelete(): void
+    {
+        if (empty($this->selected)) {
+            return;
+        }
+
+        $this->showBulkModal = true;
+    }
+
+    public function bulkDelete(): void
+    {
+        if (empty($this->selected)) {
+            $this->showBulkModal = false;
+
+            return;
+        }
+
+        $count = 0;
+        $skipped = 0;
+
+        foreach (Project::whereIn('id', $this->selected)->get() as $project) {
+            // پروژه‌ای که آپدیت یا پکیج دارد قابل حذف نیست (قانون صفحه حذف تکی)
+            if ($project->updates()->count() > 0 || $project->packages()->count() > 0) {
+                $skipped++;
+                continue;
+            }
+
+            $project->delete();
+            $count++;
+        }
+
+        $this->clearSelection();
+        $this->showBulkModal = false;
+
+        if ($skipped > 0) {
+            $this->toast(fa_num($count) . ' پروژه حذف شد؛ ' . fa_num($skipped) . ' پروژه دارای آپدیت/پکیج حذف نشد.', 'warning');
+        } else {
+            $this->toast(fa_num($count) . ' پروژه انتخاب‌شده حذف شد.');
+        }
     }
 
     /** @return array<string, array<int, string>|string> */

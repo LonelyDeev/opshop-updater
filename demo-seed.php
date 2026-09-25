@@ -8,6 +8,7 @@ $app = require __DIR__ . '/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Models\Customer;
+use App\Models\Gateway;
 use App\Models\Package;
 use App\Models\PackageImage;
 use App\Models\PackageLicense;
@@ -16,6 +17,8 @@ use App\Models\PackagePurchase;
 use App\Models\PackageVersion;
 use App\Models\Project;
 use App\Models\Subscription;
+use App\Models\SubscriptionPlan;
+use App\Models\SubscriptionRequest;
 use App\Models\Update;
 use Illuminate\Support\Str;
 
@@ -198,8 +201,101 @@ PackageLicense::updateOrCreate(['customer_id' => $expiredCustomer->id, 'package_
     'duration_months' => 12,
 ]);
 
+// ---------- درگاه آزمایشی (local) — برای تست جریان پرداخت بدون درگاه واقعی ----------
+// (برای محیط واقعی غیرفعالش کنید یا درگاه بانکی واقعی را در تنظیمات→درگاه‌ها فعال کنید)
+Gateway::updateOrCreate(['key' => 'local'], ['is_active' => true]);
+
+// ---------- subscription plans (طرح‌های اشتراک) ----------
+$planData = [
+    [
+        'name' => 'پلن رایگان شروع', 'description' => 'برای آشنایی با پکیج‌های ما — بدون هزینه، پس از تأیید مدیر فعال می‌شود.',
+        'duration_months' => 1, 'price' => 0, 'discount_price' => null,
+        'is_free' => true, 'is_one_time' => true, 'is_active' => true, 'sort_order' => 1,
+        'features' => ['دسترسی به ۲ پکیج منتخب', 'پشتیبانی پایه', 'آپدیت‌های امنیتی'],
+    ],
+    [
+        'name' => 'پلن یک‌ماهه', 'description' => 'دسترسی یک‌ماهه به همه پکیج‌های پلن.',
+        'duration_months' => 1, 'price' => 350000, 'discount_price' => null,
+        'is_free' => false, 'is_one_time' => false, 'is_active' => true, 'sort_order' => 2,
+        'features' => ['دسترسی به همه پکیج‌های پلن', 'پشتیبانی اولویت‌دار', 'آپدیت‌های امنیتی و ارتقا', 'نصب روی یک دامنه'],
+    ],
+    [
+        'name' => 'پلن سه‌ماهه', 'description' => 'دسترسی سه‌ماهه با تخفیف — بهترین شروع برای کسب‌وکارهای کوچک.',
+        'duration_months' => 3, 'price' => 900000, 'discount_price' => 720000,
+        'is_free' => false, 'is_one_time' => false, 'is_active' => true, 'sort_order' => 3,
+        'features' => ['دسترسی به همه پکیج‌های پلن', 'پشتیبانی اولویت‌دار', 'آپدیت‌های امنیتی و ارتقا', 'نصب روی دو دامنه', 'مشاوره نصب'],
+    ],
+    [
+        'name' => 'پلن یک‌ساله حرفه‌ای', 'description' => 'دسترسی کامل یک‌ساله — محبوب‌ترین انتخاب مشتریان.',
+        'duration_months' => 12, 'price' => 3600000, 'discount_price' => 2800000,
+        'is_free' => false, 'is_one_time' => false, 'is_active' => true, 'sort_order' => 4,
+        'features' => ['دسترسی به همه پکیج‌های پلن', 'پشتیبانی اختصاصی ۲۴/۷', 'همه آپدیت‌ها و نسخه‌های جدید', 'نصب روی پنج دامنه', 'مشاوره نصب و راه‌اندازی', 'اولویت توسعه فیچرهای سفارشی'],
+    ],
+    [
+        'name' => 'پلن دائمی ویژه', 'description' => 'یک‌بار بخرید، همیشه استفاده کنید — محدودیت یک‌بارمصرف.',
+        'duration_months' => 0, 'price' => 12000000, 'discount_price' => null,
+        'is_free' => false, 'is_one_time' => true, 'is_active' => true, 'sort_order' => 5,
+        'features' => ['دسترسی دائمی به پکیج‌های پلن', 'پشتیبانی اختصاصی ۲۴/۷', 'همه آپدیت‌های آینده', 'نامحدود در دامنه‌های خودتان', 'مهاجرت و نصب رایگان'],
+    ],
+    [
+        'name' => 'پلن شش‌ماهه (غیرفعال)', 'description' => 'نمونه طرح غیرفعال برای تست.',
+        'duration_months' => 6, 'price' => 1800000, 'discount_price' => null,
+        'is_free' => false, 'is_one_time' => false, 'is_active' => false, 'sort_order' => 6,
+        'features' => ['دسترسی به همه پکیج‌های پلن', 'پشتیبانی اولویت‌دار'],
+    ],
+];
+
+$subPlans = collect($planData)->map(function ($p) {
+    return SubscriptionPlan::updateOrCreate(['name' => $p['name']], $p);
+});
+
+// پکیج‌های هر طرح:
+//  - پلن رایگان: ۲ پکیج منتخب با مدت اختصاصی ۱ ماهه
+//  - پلن‌های پولی: همه پکیج‌های فعال با مدت پیش‌فرض طرح
+//  - پلن دائمی: همه پکیج‌ها با مدت اختصاصی ۰ (نامحدود)
+$freePlan = $subPlans->firstWhere('name', 'پلن رایگان شروع');
+$freePlan->packages()->syncWithPivotValues($packages->take(2)->pluck('id')->all(), ['duration_months' => 1]);
+
+$permanentPlan = $subPlans->firstWhere('name', 'پلن دائمی ویژه');
+$permanentPlan->packages()->syncWithPivotValues($packages->pluck('id')->all(), ['duration_months' => 0]);
+
+foreach ($subPlans->whereNotIn('name', ['پلن رایگان شروع', 'پلن دائمی ویژه']) as $p) {
+    $p->packages()->sync($packages->pluck('id')->all()); // مدت پیش‌فرض طرح
+}
+
+// ---------- subscription requests (درخواست‌های اشتراک) ----------
+// ۱) درخواست پرداخت‌شده در انتظار تأیید مدیر
+$monthly = $subPlans->firstWhere('name', 'پلن یک‌ماهه');
+SubscriptionRequest::updateOrCreate(['customer_id' => $customers[1]->id, 'subscription_plan_id' => $monthly->id], [
+    'gateway' => 'local', 'amount' => $monthly->final_price,
+    'transaction_id' => 'SUBTRX' . strtoupper(Str::random(8)),
+    'payment_status' => 'paid', 'status' => 'pending',
+    'paid_at' => now()->subDays(1), 'created_at' => now()->subDays(1),
+]);
+
+// ۲) درخواست رایگان در انتظار تأیید
+$freeReqCustomer = $customers[2];
+SubscriptionRequest::updateOrCreate(['customer_id' => $freeReqCustomer->id, 'subscription_plan_id' => $freePlan->id], [
+    'gateway' => null, 'amount' => 0,
+    'payment_status' => 'free', 'status' => 'pending',
+    'created_at' => now()->subDays(2),
+]);
+
+// ۳) درخواست ردشده
+$rejectedCustomer = $customers[3];
+$annual = $subPlans->firstWhere('name', 'پلن یک‌ساله حرفه‌ای');
+SubscriptionRequest::updateOrCreate(['customer_id' => $rejectedCustomer->id, 'subscription_plan_id' => $annual->id], [
+    'gateway' => 'zarinpal', 'amount' => $annual->final_price,
+    'transaction_id' => 'SUBTRX' . strtoupper(Str::random(8)),
+    'payment_status' => 'paid', 'status' => 'rejected',
+    'paid_at' => now()->subDays(9), 'approved_at' => null, 'rejected_at' => now()->subDays(8),
+    'admin_note' => 'اطلاعات پرداخت قابل تأیید نبود؛ لطفاً با پشتیبانی تماس بگیرید.',
+    'created_at' => now()->subDays(9),
+]);
+
 echo "Demo data seeded OK\n";
 echo 'Projects: ' . Project::count() . ' | Packages: ' . Package::count() . ' | Versions: ' . PackageVersion::count()
     . ' | Plans: ' . PackagePricingPlan::count() . ' | Customers: ' . Customer::count()
     . ' | Licenses: ' . PackageLicense::count() . ' | Purchases: ' . PackagePurchase::count()
-    . ' | Subscriptions: ' . Subscription::count() . ' | Updates: ' . Update::count() . "\n";
+    . ' | Subscriptions: ' . Subscription::count() . ' | Updates: ' . Update::count()
+    . ' | SubPlans: ' . SubscriptionPlan::count() . ' | SubRequests: ' . SubscriptionRequest::count() . "\n";

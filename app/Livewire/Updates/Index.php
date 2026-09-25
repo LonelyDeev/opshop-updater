@@ -32,12 +32,23 @@ class Index extends Component
     #[Url]
     public int $project_id = 0;
 
+    /** مرتب‌سازی — پیش‌فرض همان ترتیب قبلی صفحه (جدیدترین) است */
+    #[Url]
+    public string $sort = 'newest';
+
     /** @var array<string, mixed> */
     public array $form = [];
 
     public bool $showModal = false;
     public ?int $editingId = null;
     public ?int $deleteId = null;
+
+    /** @var array<int,int> */
+    public array $selected = [];
+
+    public bool $selectAll = false;
+
+    public bool $showBulkModal = false;
 
     public function updatedSearch(): void
     {
@@ -59,6 +70,11 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function updatedSort(): void
+    {
+        $this->resetPage();
+    }
+
     #[Computed]
     public function records()
     {
@@ -71,7 +87,8 @@ class Index extends Component
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->type, fn ($q) => $q->where('type', $this->type))
             ->when($this->project_id, fn ($q) => $q->where('project_id', $this->project_id))
-            ->latest()
+            ->when($this->sort === 'newest', fn ($q) => $q->latest())
+            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
             ->paginate(12);
     }
 
@@ -210,6 +227,69 @@ class Index extends Component
         $update->delete();
         $this->deleteId = null;
         $this->toast("آپدیت «{$title}» حذف شد.");
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  حذف چندتایی                                                      */
+    /* ---------------------------------------------------------------- */
+
+    public function updatedSelectAll(bool $value): void
+    {
+        $ids = $this->records()->pluck('id')->all();
+
+        $this->selected = $value
+            ? array_values(array_unique(array_merge($this->selected, $ids)))
+            : array_values(array_diff($this->selected, $ids));
+    }
+
+    public function toggleSelect(int $id): void
+    {
+        $this->selected = in_array($id, $this->selected)
+            ? array_values(array_diff($this->selected, [$id]))
+            : array_values(array_merge($this->selected, [$id]));
+
+        // همگام‌سازی چک‌باکس سربرگ با وضعیت صفحه فعلی
+        $pageIds = $this->records()->pluck('id')->all();
+        $this->selectAll = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selected = [];
+        $this->selectAll = false;
+    }
+
+    public function confirmBulkDelete(): void
+    {
+        if (empty($this->selected)) {
+            return;
+        }
+
+        $this->showBulkModal = true;
+    }
+
+    public function bulkDelete(): void
+    {
+        if (empty($this->selected)) {
+            $this->showBulkModal = false;
+
+            return;
+        }
+
+        $count = 0;
+        foreach (Update::whereIn('id', $this->selected)->get() as $update) {
+            // حذف فایل مرتبط از دیسک local (همان منطق حذف تکی)
+            if ($update->download_link && Storage::disk('local')->exists($update->download_link)) {
+                Storage::disk('local')->delete($update->download_link);
+            }
+
+            $update->delete();
+            $count++;
+        }
+
+        $this->clearSelection();
+        $this->showBulkModal = false;
+        $this->toast(fa_num($count) . ' آپدیت انتخاب‌شده حذف شد.');
     }
 
     /** @return array<string, array<int, string>|string> */

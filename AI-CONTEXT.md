@@ -54,9 +54,12 @@ php artisan serve          # http://localhost:8000
 - **PackageVersion**: package_id, version, changelog/what_added/what_changed/what_fixed, file_path, file_hash(SHA256), file_size, min_php_version, min_laravel_version, dependencies(json), is_mandatory, status.
 - **PackagePricingPlan**: package_id, name, description, duration_months (0=نامحدود), price, discount, **final_price**, is_one_time, is_active.
 - **PackagePurchase**: package_id, version_id, pricing_plan_id, customer_id, license_id, **transaction_id**, callback_url, amount, gateway, payment_url, status(pending/paid/failed/refunded), paid_at, meta(json). `markAsPaid/Failed()`.
-- **PackageLicense**: license_key(`PKG-...`), package_id, customer_id, purchase_id, **renewed_from**, status(active/revoked/expired), starts_at, expires_at, duration_months.
+- **PackageLicense**: license_key(`PKG-...`), package_id, customer_id, purchase_id, **subscription_request_id (لایسنس‌های صادرشده از تأیید اشتراک)**, renewed_from, status(active/revoked/expired), starts_at, expires_at, duration_months.
 - **PackageDownloadToken**: token, license_id, version_id, customer_id, expires_at(+15m), used_at, ip.
 - **Subscription**: customer_id, project_id, price, start/end/expires_at, status(active/expired/suspended), payment_status, **code** (کد آپدیت قدیمی سطح اشتراک), description.
+- **SubscriptionPlan** (`subscription_plans`): name, description, **duration_months (۰=نامحدود)**, price, discount_price, is_free, **is_one_time (محدودیت یک‌بارمصرف)**, is_active, sort_order, **features (JSON آرایه‌ای از متن‌ها — قابلیت‌های طرح)**. Accessors: `final_price`, `has_discount`, `duration_label`. Relations: `packages()` (belongsToMany با pivot `duration_months` — مدت اختصاصی هر پکیج در طرح؛ null = مدت پیش‌فرض طرح). گاردها: `hasCustomerUsed`, `hasCustomerPending`.
+- **SubscriptionPlanPackage** (pivot `subscription_plan_package`): subscription_plan_id, package_id, duration_months(nullable), unique(plan,package).
+- **SubscriptionRequest** (`subscription_requests`): customer_id, subscription_plan_id, gateway, amount, transaction_id, payment_url, callback_url (برای خریدهای API), **payment_status(pending/paid/failed/free)**, **status(pending/approved/rejected)**, admin_note, paid_at, approved_at, rejected_at, **meta (شامل activated_licenses پس از تأیید)**. چرخه: ثبت → پرداخت درگاه (یا رایگان) → **در انتظار تأیید مدیر** → approve → لایسنس همه پکیج‌های طرح صادر/تمدید | reject → admin_note.
 - **Gateway** (`gateways`): key (یکی از ۱۱ کلید `config/general.php → supported_gateways`)، name, ordering, is_active. **GatewayConfig**: gateway_id, key, value (مثلا merchantId). helper سراسری: `get_gateway_configs($key)` از bootstrap/helpers.php.
 - **Setting** (`settings`): key, value, type, group (general/email). `Setting::set()`.
 - **Transaction**: جدول shetabit (`transactions`).
@@ -69,18 +72,30 @@ php artisan serve          # http://localhost:8000
 ```
 GET  /                              → Shop\Home            (فروشگاه)
 GET  /packages/{slug}               → Shop\PackageShow     (جزئیات + checkout)
-GET  /payment/callback              → WebPaymentController (بازگشت از درگاه، GET)
+GET  /plans                         → Shop\Plans           (طرح‌های اشتراک + خرید)
+GET  /subscription-requests/{request} → Shop\SubscriptionStatus (وضعیت درخواست: انتظار تأیید/فعال/رد + لایسنس‌ها)
+GET  /payment/callback              → WebPaymentController (بازگشت از درگاه، GET — پکیج و اشتراک)
 POST /payment/callback              → WebPaymentController (POST بانک، CSRF-exempt)
+GET  /payment/return/{purchase}     → PaymentReturnController (نتیجه + شمارش ۱۰ث — هم خرید پکیج هم درخواست اشتراک)
 GET  /payment/result/{purchase}     → Shop\PaymentResult   (صفحه نتیجه)
 GET  /get-update/{code}             → UpdateDownloadController (دانلود مستقیم آپدیت)
      + Auth::routes() (laravel/ui)
-GET  /admin/...                     → ۱۳ صفحه Livewire پنل (auth middleware)
+GET  /admin/...                     → ۱۵ صفحه Livewire پنل (auth middleware)
+     + /admin/subscription-plans (پلن‌ها و طرح‌ها — CRUD با features + پکیج‌های هر طرح)
+     + /admin/subscription-requests (درخواست‌ها و تأییدها — تأیید/رد + لایسنس‌های صادرشده)
 ```
 
 ### API v1 (`routes/api/v1.php`)
 ```
 GET  /api/v1/check-update?...                          → UpdateController@check
 GET  /api/v1/download-update/{id}                      → UpdateController@download
+
+--- طرح‌های اشتراک (جدید ۱۴۰۵/۰۷/۰۳) ---
+GET  /api/v1/plans                                      → ApiSubscriptionPlanController@index (طرح‌های فعال + features + packages هر طرح + is_requested)
+POST /api/v1/plans/{plan}/purchase                      → body: {callback_url, gateway?} → free: {is_free, request_id, status, message} / paid: {payment_url, transaction_id, amount, gateway, request_id}
+GET  /api/v1/subscription-requests/{id}                 → وضعیت درخواست + پیام + licenses[] (پس از تأیید مدیر: license_key/expires_at/is_unlimited/days_remaining)
+     (کال‌بک درگاه همان /api/v1/payments/callback و /payment/callback؛ درگاه→ payment/return → callback_url فروشگاه با status+request_id+type=subscription)
+```
 GET  /api/v1/packages                                  → ApiPackageController@index    (پکیج‌های پروژه‌های مشتری)
                                                         ⭐ هر آیتم: is_purchased + purchased_license {license_key, expires_at, days_remaining, is_unlimited} (+ installed_license قدیمی)
 GET  /api/v1/packages/{slug}                           → show (+ is_purchased + purchased_license + installed_license)
@@ -116,13 +131,22 @@ GET  /api/v1/packages/download/{dlToken}               → فایل ZIP؛ ⭐ ح
 
 ---
 
-## ۵. جریان پرداخت (دو مسیر، یک سرویس)
+## ۵. جریان پرداخت و اشتراک‌ها
+
+### ⭐ جریان طرح‌های اشتراک (۱۴۰۵/۰۷/۰۳)
+- **مدیر** در «طرح‌های اشتراک» (admin/subscription-plans) طرح می‌سازد: مدت (۰=نامحدود)، قیمت/تخفیف، رایگان/پولی، یک‌بارمصرف، **features** (آرایه JSON)، **پکیج‌های طرح با مدت اختصاصی** (pivot duration_months؛ null = مدت پیش‌فرض طرح).
+- **مشتری** در فرانت `/plans` (یا API) طرح را می‌خرد → `SubscriptionService::createRequest` → درخواست pending: پولی → payment_url درگاه؛ رایگان → مستقیم «در انتظار تأیید مدیر».
+- پرداخت موفق (`PaymentService::verifyPayment` → شاخه SubscriptionRequest): payment_status=paid؛ **لایسنس صادر نمی‌شود**.
+- **مدیر** در «درخواست‌ها و تأییدها» (admin/subscription-requests) تأیید می‌کند → `SubscriptionService::approve`: برای هر پکیج طرح `LicenseService::issueOrRenewForSubscription` (مدت = pivot ?? پیش‌فرض طرح؛ لایسنس فعال قبلی → تمدید از انقضای فعلی + revoked قدیمی)؛ کلیدها در meta.activated_licenses. رد → admin_note.
+- مشتری در `/subscription-requests/{id}` وضعیت + لایسنس‌ها را می‌بیند (wire:poll 60s هنگام انتظار).
+- گاردها: یک‌بارمصرف (`hasCustomerUsed`)، درخواست در جریان (`hasCustomerPending`)، طرح غیرفعال، طرح بدون پکیج — همه پیام فارسی.
+- **نکته payment/form**: درایورهای فرم‌محور/ local برای درخواست‌های اشتراک query `t=sub` دارند (جزء امضای URL) چون شناسه‌های purchase و subscription_request توالی‌های جدا دارند؛ PaymentFormController با آن رکورد درست را پیدا می‌کند.
 
 ### سرویس‌ها
-- `PaymentService::createPayment(PackagePurchase $purchase, ?string $gateway = null)`:
+- `PaymentService::createPayment(PackagePurchase|SubscriptionRequest $payable, ?string $gateway = null)`:
   gateway پیش‌فرض `zarinpal`؛ `get_gateway_configs($gateway)` تنظیمات را از جدول gateways می‌خواند؛ callbackUrl = `$purchase->callback_url`؛ بعد از purchase با `transaction_id`/`gateway` آپدیت می‌شود؛ خروجی `payment_url`.
 - `PaymentService::verifyPayment(string $transactionId, bool $renew = false)`:
-  اگر pending → `Payment::via(...)->verify()`؛ موفق → `markAsPaid` + صدور لایسنس:
+  **اول جدول subscription_requests را چک می‌کند** (شاخه اشتراک → `verifySubscriptionPayment`: markAsPaid، بدون صدور لایسنس)؛ سپس خرید پکیج. اگر pending → `Payment::via(...)->verify()`؛ موفق → `markAsPaid` + صدور لایسنس:
   `$renew` فقط از مسیر **وب** true می‌شود → `LicenseService::issueOrRenew` (اگر مشتری برای همین پکیج لایسنس active/expired دارد → `renewLicense`: انقضا جدید = انقضای قبلی + ماه‌های طرح، لایسنس قدیمی revoked، `renewed_from` ثبت می‌شود)؛ در API همان `issueLicense` مستقیم.
 - مسیر رایگان (is_free یا final_price=0): بدون درگاه، خرید paid + لایسنس فوری.
 
@@ -190,6 +214,10 @@ checkout در `Shop\PackageShow::buy()`: کد آپدیت → Customer → گار
 18. **رکورد pending یتیم**: اگر `createPayment` بعد از `PackagePurchase::create` شکست بخورد، رکورد pending می‌ماند → در purchase API حالا `$purchase->delete()` در catch.
 19. **آپلود تصویر با Livewire — هرگز `$file->move()` نزنید**: فایل‌های آپلودی Livewire (TemporaryUploadedFile) در درخواست *قبلی* (POST به `/livewire/upload-file`) آپلود شده‌اند؛ `move()` در پس‌زمینه `move_uploaded_file()` صدا می‌زند که فقط روی فایل‌های *همین درخواست* کار می‌کند → خطای `Could not move the file "…livewire-tmp/…" to "…public/uploads/…"` (روی ویندوز/لاراگون کاربر دیده شد). راه‌حل در `ImageUploadService::persistFile()`: `rename()` معمولی + fallback کپی استریمی (`stream_copy_to_stream`) + حذف مبدأ — هم برای فایل موقت Livewire هم آپلود معمولی، روی هر OS.
 20. **CKEditor 4 حالت Source رویداد change نمی‌دهد**: وقتی کاربر روی دکمه «منبع» می‌زند و HTML خام تایپ می‌کند، رویداد `change` ادیتور خاموش است → textarea مخفی (wire:model) هیچ‌وقت آپدیت نمی‌شود و سمت سرر **خالی** می‌رسد. راه‌حل در `resources/js/ckeditor.js` (richEditor): شنونده `mode` → در حالت source روی `textarea.cke_source` مستقیماً input/change/blur بسته می‌شود و sync() اجرا می‌شود؛ برگشت به wysiwyg هم یک sync اجباری دارد. علاوه بر این `allowedContent: true` ست شده تا HTML خام (کلاس/دیتا-اتربیوت‌های سفارشی) در رفت‌وبرگشت wysiwyg⇄source حذف نشود.
+22. **inline `@php(...)` در Blade — خطرناک در فایل‌های بزرگ**: رگکس `storePhpBlocks` هر `@php(` را با *نزدیک‌ترین* `@endphp` بعدی جفت می‌کند؛ اگر در همان فایل `@php ... @endphp` بلوکی هم باشد، ممکن است صدها خط به‌عنوان PHP خام بلعیده شود و رندر خراب/خالی شود (در subscription-requests دیده شد). قانون: در blade، فقط فرم بلوکی `@php\n ... \n@endphp` استفاده کنید، نه فرم inline یک‌خطی.
+23. **payment/form و اشتراک‌ها**: شناسه‌های `package_purchases` و `subscription_requests` توالی‌های جداگانه دارند (collision قطعی) → URL امضادار درگاه‌های فرم‌محور برای اشتراک‌ها query `t=sub` دارد که **جزء امضاست**؛ PaymentFormController با آن جدول درست را انتخاب می‌کند. اگر روزی مسیر دیگری ساختید همین الگو را نگه دارید.
+24. **بسته‌بندی: هرگز از baseline قدیمی بیلد نکنید** — در بسته‌بندی قبلی، staging از «استخراج zip قدیمی + overlay چند فایل» ساخته شد و بخش‌هایی که در همان جلسه اضافه شده بودند (طرح‌ها/درخواست‌ها) گم شدند و کاربر فکر کرد حذف شده‌اند. قانون: staging باید از **دایرکتوری زنده کامل پروژه** با rsync excludeهای anchored (مثل `/vendor` نه `vendor` تا resources/views/vendor حذف نشود) ساخته شود.
+
 21. **سقف پیش‌فرض آپلود موقت Livewire فقط ۱۲MB است**: `livewire.temporary_file_upload.rules` وقتی null باشد → `['required','file','max:12288']` → آپلود فایل‌های ZIP بزرگ پکیج با پیام «The versionFile failed to upload.» می‌شکند. حالا در `config/livewire.php` سقف ۵۰۰MB است. **محدودیت‌های PHP باید جداگانه بالا برود** (درگاه آپلود تک‌پارچه است، نه chunked): `upload_max_filesize` و `post_max_size` و `memory_limit` — لاراگون: php.ini از منوی PHP؛ سی‌پنل: MultiPHP INI Editor؛ اگر PHP قبول نکند، همان پیام failed to upload دوباره ظاهر می‌شود.
 
 

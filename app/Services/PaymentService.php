@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Gateway;
 use App\Models\PackagePurchase;
+use App\Models\SubscriptionRequest;
+use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use RuntimeException;
@@ -14,9 +16,15 @@ use Shetabit\Payment\Facade\Payment;
 class PaymentService
 {
 
-    public function createPayment(PackagePurchase $purchase, ?string $gateway = null): array
+    /**
+     * ایجاد پرداخت برای خرید پکیج یا درخواست اشتراک
+     *
+     * @param  PackagePurchase|SubscriptionRequest  $payable
+     * @return array{payment_url: string, transaction_id: string, amount: int, gateway: string}
+     */
+    public function createPayment(PackagePurchase|SubscriptionRequest $payable, ?string $gateway = null): array
     {
-        if ($purchase->amount <= 0) {
+        if ($payable->amount <= 0) {
             throw new RuntimeException('مبلغ تراکنش باید بزرگ‌تر از صفر باشد.');
         }
 
@@ -30,14 +38,12 @@ class PaymentService
             // callback_url فروشگاه (که هنگام ایجاد خرید ثبت شده) بازگردانده می‌شود.
             $callbackUrl = URL::route('payment.callback');
 
-            // 3️⃣ ایجاد Invoice
+            // 3️⃣ ایجاد Invoice (شرح تراکنش بر اساس نوع: خرید پکیج یا طرح اشتراک)
             $invoice = (new Invoice)
-                ->amount(intval($purchase->amount))
-                ->detail('description', "خرید پکیج {$purchase->package->name} - {$purchase->package->slug}")
-                ->detail('purchase_id', $purchase->id)
-                ->detail('package_id', $purchase->package_id)
-                ->detail('customer_id', $purchase->customer_id)
-                ->detail('pricing_plan_id', $purchase->pricing_plan_id);
+                ->amount(intval($payable->amount))
+                ->detail('description', $this->payableDescription($payable))
+                ->detail($payable instanceof SubscriptionRequest ? 'subscription_request_id' : 'purchase_id', $payable->id)
+                ->detail('customer_id', $payable->customer_id);
 
             // 4️⃣ ایجاد پرداخت
             $payment = Payment::via($gateway)
@@ -45,17 +51,18 @@ class PaymentService
                 ->callbackUrl($callbackUrl)
                 ->purchase(
                     $invoice,
-                    function ($driver, $transactionId) use ($purchase, $gateway) {
+                    function ($driver, $transactionId) use ($payable, $gateway) {
                         // نکته: $driver در این نسخه آبجکتِ درایور است نه رشته → کلید درگاه را ذخیره می‌کنیم
-                        $purchase->update([
+                        $payable->update([
                             'transaction_id' => $transactionId,
                             'gateway'        => $gateway,
                         ]);
 
-                        Log::info('Purchase transaction created', [
-                            'purchase_id'   => $purchase->id,
+                        Log::info('Payment transaction created', [
+                            'payable'        => $payable instanceof SubscriptionRequest ? 'subscription_request' : 'purchase',
+                            'id'             => $payable->id,
                             'transaction_id' => $transactionId,
-                            'gateway'       => $gateway,
+                            'gateway'        => $gateway,
                         ]);
                     }
                 );
@@ -66,33 +73,47 @@ class PaymentService
             /** @var \Shetabit\Multipay\RedirectionForm $form */
             $form = $payment->pay();
 
-            $paymentUrl = $this->resolvePaymentUrl($form, $purchase, $gateway);
+            $paymentUrl = $this->resolvePaymentUrl($form, $payable, $gateway);
 
             if (!$paymentUrl) {
                 throw new RuntimeException('دریافت آدرس پرداخت از درگاه ناموفق بود.');
             }
 
-            // 6️⃣ آپدیت نهایی
-            $purchase->update([
-                'payment_url' => $paymentUrl,
-                'status'      => 'pending',
-            ]);
+            // 6️⃣ آپدیت نهایی (برای اشتراک، وضعیت approval دست‌نخورده می‌ماند = pending)
+            $payable->update(
+                $payable instanceof SubscriptionRequest
+                    ? ['payment_url' => $paymentUrl]
+                    : ['payment_url' => $paymentUrl, 'status' => 'pending']
+            );
 
             return [
                 'payment_url'    => $paymentUrl,
-                'transaction_id' => (string) $purchase->transaction_id,
-                'amount'         => $purchase->amount,
-                'gateway'        => $purchase->gateway ?? $gateway,
+                'transaction_id' => (string) $payable->transaction_id,
+                'amount'         => (int) $payable->amount,
+                'gateway'        => $payable->gateway ?? $gateway,
             ];
 
         } catch (\Exception $e) {
             Log::error('Payment creation failed', [
-                'purchase_id' => $purchase->id,
-                'error'       => $e->getMessage(),
-                'trace'       => $e->getTraceAsString(),
+                'payable' => $payable instanceof SubscriptionRequest ? 'subscription_request' : 'purchase',
+                'id'      => $payable->id,
+                'error'   => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
             ]);
             throw new RuntimeException('ایجاد تراکنش پرداخت ناموفق بود: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * شرح فارسی تراکنش برای درگاه (خرید پکیج یا طرح اشتراک)
+     */
+    private function payableDescription(PackagePurchase|SubscriptionRequest $payable): string
+    {
+        if ($payable instanceof SubscriptionRequest) {
+            return "خرید طرح اشتراک {$payable->plan->name}";
+        }
+
+        return "خرید پکیج {$payable->package->name} - {$payable->package->slug}";
     }
 
     /**
@@ -106,7 +127,7 @@ class PaymentService
      *    امضادار payment/form/{purchase} روی پنل اشاره می‌کند؛ مرورگر آنجا فرم را
      *    رندر می‌کند و خودکار به درگاه POST می‌شود. (برای local صفحه شبیه‌ساز درگاه رندر می‌شود.)
      */
-    private function resolvePaymentUrl(\Shetabit\Multipay\RedirectionForm $form, PackagePurchase $purchase, string $gateway): string
+    private function resolvePaymentUrl(\Shetabit\Multipay\RedirectionForm $form, PackagePurchase|SubscriptionRequest $payable, string $gateway): string
     {
         $action = trim((string) $form->getAction());
         $method = strtoupper((string) $form->getMethod());
@@ -121,23 +142,35 @@ class PaymentService
 
         // درایورهای فرم‌محور: HTML فرم خود-ارسال را ذخیره کن (local در کنترلر صفحه اختصاصی می‌گیرد)
         if ($gateway !== 'local') {
-            $purchase->forceFill(['meta->payment_form' => $form->render()])->save();
+            $payable->forceFill(['meta->payment_form' => $form->render()])->save();
         }
+
+        // پارامتر t=sub برای درخواست‌های اشتراک تا PaymentFormController رکورد درست را پیدا کند
+        // (شناسه‌های purchase و subscription_request توالی‌های جداگانه دارند و ممکن است برخورد کنند)
+        $extraParams = $payable instanceof SubscriptionRequest ? ['t' => 'sub'] : [];
 
         return URL::temporarySignedRoute(
             'payment.form',
             now()->addMinutes(30),
-            ['purchase' => $purchase->id]
+            array_merge(['purchase' => $payable->id], $extraParams)
         );
     }
 
     /**
-     * تأیید پرداخت بعد از بازگشت از درگاه
+     * تأیید پرداخت بعد از بازگشت از درگاه (خرید پکیج یا درخواست اشتراک)
      *
      * @return array{paid: bool, license_key: ?string, expires_at: ?string, message: ?string}
      */
     public function verifyPayment(string $transactionId, bool $renew = false): array
     {
+        // 0️⃣ درخواست‌های اشتراک: تراکنش‌های طرح‌های اشتراک
+        // (پس از تأیید پرداخت، فعال‌سازی با تأیید مدیر انجام می‌شود)
+        $subscriptionRequest = SubscriptionRequest::where('transaction_id', $transactionId)->first();
+
+        if ($subscriptionRequest) {
+            return $this->verifySubscriptionPayment($subscriptionRequest, $transactionId);
+        }
+
         // 1️⃣ پیدا کردن خرید بر اساس transaction_id
         $purchase = PackagePurchase::where('transaction_id', $transactionId)->first();
 
@@ -298,5 +331,81 @@ class PaymentService
             'status'  => 'unknown',
             'message' => 'وضعیت پرداخت نامشخص است.',
         ];
+    }
+
+    /**
+     * تأیید پرداخت درخواست اشتراک:
+     * رسید = پرداخت موفق → درخواست payment_status=paid و همچنان در انتظار تأیید مدیر.
+     * (صدور لایسنس اینجا انجام نمی‌شود — فعال‌سازی پس از تأیید مدیر است.)
+     */
+    private function verifySubscriptionPayment(SubscriptionRequest $request, string $transactionId): array
+    {
+        if ($request->isPaid()) {
+            Log::info('Subscription payment already verified', ['request_id' => $request->id]);
+
+            return [
+                'paid'                => true,
+                'subscription_request'=> true,
+                'request_id'          => $request->id,
+                'status'              => $request->status,
+                'message'             => 'این تراکنش قبلاً تأیید شده است.',
+            ];
+        }
+
+        try {
+            $gateway = $request->gateway ?? 'zarinpal';
+            $gatewayConfigs = get_gateway_configs($gateway);
+
+            // خودِ رسید = موفق؛ درگاه ناموفق InvalidPaymentException پرتاب می‌کند
+            Payment::via($gateway)
+                ->config($gatewayConfigs)
+                ->amount($request->amount)
+                ->transactionId($transactionId)
+                ->verify();
+
+            app(SubscriptionService::class)->settlePayment($request, $gateway);
+
+            return [
+                'paid'                => true,
+                'subscription_request'=> true,
+                'request_id'          => $request->id,
+                'status'              => $request->status,
+                'message'             => 'پرداخت با موفقیت تأیید شد. درخواست شما در انتظار تأیید مدیر است.',
+            ];
+
+        } catch (InvalidPaymentException $e) {
+            $request->markPaymentFailed($e->getMessage());
+
+            Log::error('Invalid subscription payment', [
+                'transaction_id' => $transactionId,
+                'request_id'     => $request->id,
+                'error'          => $e->getMessage(),
+            ]);
+
+            return [
+                'paid'                => false,
+                'subscription_request'=> true,
+                'request_id'          => $request->id,
+                'status'              => $request->status,
+                'message'             => 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
+            ];
+
+        } catch (\Exception $e) {
+            $request->markPaymentFailed($e->getMessage());
+
+            Log::error('Subscription payment verification exception', [
+                'transaction_id' => $transactionId,
+                'request_id'     => $request->id,
+                'error'          => $e->getMessage(),
+            ]);
+
+            return [
+                'paid'                => false,
+                'subscription_request'=> true,
+                'request_id'          => $request->id,
+                'status'              => $request->status,
+                'message'             => 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
+            ];
+        }
     }
 }

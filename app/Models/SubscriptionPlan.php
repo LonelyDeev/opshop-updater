@@ -10,120 +10,124 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * طرح اشتراک (Subscription Plan)
  *
- * طرحی که مشتریان از فروشگاه/API خریداری می‌کنند؛ پولی یا رایگان.
- * پس از پرداخت (یا ثبت رایگان)، مدیر درخواست را تأیید می‌کند →
- * اشتراک فعال + لایسنس رایگان پکیج‌های همراه طرح صادر می‌شود.
+ * طرحی پولی یا رایگان با مدت‌زمان مشخص، قابلیت‌ها و فهرست پکیج‌های همراه.
+ * مشتری طرح را از فرانت/خرید می‌کند → درخواست (SubscriptionRequest) ساخته می‌شود →
+ * پس از تأیید مدیر، برای پکیج‌های طرح لایسنس صادر/تمدید می‌شود.
  */
 class SubscriptionPlan extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'name',
-        'slug',
-        'description',
-        'duration_months',
-        'price',
-        'discount_price',
-        'is_one_time',
-        'is_active',
-        'sort_order',
-        'features',
+        'name', 'description', 'duration_months', 'price', 'discount_price',
+        'is_free', 'is_one_time', 'is_active', 'sort_order', 'features',
     ];
 
     protected $casts = [
         'duration_months' => 'integer',
         'price'           => 'integer',
         'discount_price'  => 'integer',
+        'is_free'         => 'boolean',
         'is_one_time'     => 'boolean',
         'is_active'       => 'boolean',
         'sort_order'      => 'integer',
         'features'        => 'array',
     ];
 
-    /* ---------------------------------------------------------------- */
-    /*  Relations                                                        */
-    /* ---------------------------------------------------------------- */
+    /* ---------------- Relationships ---------------- */
 
-    /** پکیج‌های همراه طرح (خرید طرح = دسترسی رایگان موقت به این پکیج‌ها) */
+    /** پکیج‌های این طرح (با مدت دسترسی اختصاصی در pivot) */
     public function packages(): BelongsToMany
     {
         return $this->belongsToMany(Package::class, 'subscription_plan_package')
-            ->withPivot('free_months')
-            ->withTimestamps();
+            ->withPivot('duration_months')
+            ->withTimestamps()
+            ->orderBy('subscription_plan_package.id');
     }
 
-    public function orders(): HasMany
+    public function requests(): HasMany
     {
-        return $this->hasMany(SubscriptionOrder::class, 'subscription_plan_id');
+        return $this->hasMany(SubscriptionRequest::class);
     }
 
-    /* ---------------------------------------------------------------- */
-    /*  Attributes                                                       */
-    /* ---------------------------------------------------------------- */
+    /* ---------------- Helpers ---------------- */
 
-    /** مبلغ نهایی قابل پرداخت (قیمت − تخفیف، حداقل صفر) */
     public function getFinalPriceAttribute(): int
     {
-        return max(0, (int) $this->price - (int) ($this->discount_price ?? 0));
+        if ($this->is_free) {
+            return 0;
+        }
+
+        return (int) ($this->discount_price ?? $this->price);
     }
 
-    public function getIsFreeAttribute(): bool
+    public function getHasDiscountAttribute(): bool
     {
-        return $this->final_price <= 0;
+        return !$this->is_free
+            && $this->discount_price !== null
+            && $this->discount_price < $this->price;
     }
 
-    /** برچسب مدت اعتبار طرح */
+    public function getDiscountPercentAttribute(): int
+    {
+        if (!$this->has_discount || $this->price <= 0) {
+            return 0;
+        }
+
+        return (int) round((1 - $this->discount_price / $this->price) * 100);
+    }
+
     public function getDurationLabelAttribute(): string
     {
-        return match (true) {
-            (int) $this->duration_months === 0 => 'نامحدود',
-            (int) $this->duration_months === 1 => '۱ ماه',
-            default => fa_num($this->duration_months) . ' ماه',
-        };
-    }
+        if ($this->duration_months === 0) {
+            return 'نامحدود';
+        }
+        if ($this->duration_months < 12) {
+            return $this->duration_months . ' ماه';
+        }
+        $years = $this->duration_months / 12;
 
-    /** برچسب مدت دسترسی رایگان یک پکیج همراه */
-    public static function freeMonthsLabel(int $months): string
-    {
-        return match (true) {
-            $months === 0 => 'نامحدود',
-            $months === 1 => '۱ ماه رایگان',
-            default => fa_num($months) . ' ماه رایگان',
-        };
+        return ($years == floor($years) ? (int) $years : $years) . ' سال';
     }
-
-    /* ---------------------------------------------------------------- */
-    /*  Helpers                                                          */
-    /* ---------------------------------------------------------------- */
 
     /**
-     * آیا این مشتری قبلاً از این طرح استفاده کرده است؟
-     * (سفارش‌های pending/approved استفاده‌شده حساب می‌شوند؛ ردشده قابل تکرار است)
+     * مدت دسترسی مؤثر برای پکیج مشخص در این طرح
+     * (مدت اختصاصی pivot یا مدت پیش‌فرض طرح)
+     */
+    public function effectiveDurationFor(Package $package): ?int
+    {
+        $pivot = $this->packages()->where('packages.id', $package->id)->first()?->pivot;
+
+        return $pivot ? (int) $pivot->duration_months : (int) $this->duration_months;
+    }
+
+    /**
+     * آیا این مشتری قبلاً این طرحِ یک‌بارمصرف را استفاده (تأیید) کرده است؟
      */
     public function hasCustomerUsed(int $customerId): bool
     {
-        return SubscriptionOrder::query()
-            ->where('subscription_plan_id', $this->id)
+        if (!$this->is_one_time) {
+            return false;
+        }
+
+        return $this->requests()
             ->where('customer_id', $customerId)
-            ->where('admin_status', '!=', SubscriptionOrder::ADMIN_STATUS_REJECTED)
+            ->where('status', SubscriptionRequest::STATUS_APPROVED)
             ->exists();
     }
 
-    public function scopeActive($query)
+    /**
+     * آیا این مشتری درخواست در جریان (پرداخت‌شده/رایگان و در انتظار تأیید) دارد؟
+     */
+    public function hasCustomerPending(int $customerId): bool
     {
-        return $query->where('is_active', true);
-    }
-
-    public static function generateSlug(string $name): string
-    {
-        $base = \Illuminate\Support\Str::slug($name) ?: 'plan';
-        $slug = $base;
-
-        while (static::where('slug', $slug)->exists()) {
-            $slug = $base . '-' . strtolower(\Illuminate\Support\Str::random(4));
-        }
-
-        return $slug;
+        return $this->requests()
+            ->where('customer_id', $customerId)
+            ->where('status', SubscriptionRequest::STATUS_PENDING)
+            ->whereIn('payment_status', [
+                SubscriptionRequest::PAYMENT_PAID,
+                SubscriptionRequest::PAYMENT_FREE,
+            ])
+            ->exists();
     }
 }

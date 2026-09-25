@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', \App\Livewire\Shop\Home::class)->name('shop.home');
 Route::get('packages/{slug}', \App\Livewire\Shop\PackageShow::class)->name('shop.package');
 
+// طرح‌های اشتراک (فروشگاه عمومی)
+Route::get('plans', \App\Livewire\Shop\Plans::class)->name('shop.plans');
+Route::get('subscription-requests/{request}', \App\Livewire\Shop\SubscriptionStatus::class)->name('shop.subscription.status');
+
 // پرداخت (عمومی)
 Route::get('payment/callback', [\App\Http\Controllers\Front\WebPaymentController::class, 'callback'])->name('payment.callback');
 Route::post('payment/callback', [\App\Http\Controllers\Front\WebPaymentController::class, 'callback'])->name('payment.callback.post');
@@ -54,6 +58,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     Route::get('purchases/{purchase}', \App\Livewire\Purchases\Show::class)->name('purchases.show');
     Route::get('customers', \App\Livewire\Customers\Index::class)->name('customers.index');
     Route::get('subscriptions', \App\Livewire\Subscriptions\Index::class)->name('subscriptions.index');
+
+    // طرح‌های اشتراک + درخواست‌ها/تأییدها
+    Route::get('subscription-plans', \App\Livewire\SubscriptionPlans\Index::class)->name('subscription-plans.index');
+    Route::get('subscription-requests', \App\Livewire\SubscriptionRequests\Index::class)->name('subscription-requests.index');
 
     // سیستم
     Route::get('reports', \App\Livewire\Reports\Index::class)->name('reports.index');
