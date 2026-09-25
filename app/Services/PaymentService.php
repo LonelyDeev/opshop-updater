@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Gateway;
 use App\Models\PackagePurchase;
+use App\Models\SubscriptionOrder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use RuntimeException;
@@ -96,6 +97,167 @@ class PaymentService
     }
 
     /**
+     * ایجاد تراکنش پرداخت برای سفارش اشتراک (طرح اشتراک، نه پکیج).
+     * قرارداد خروجی همان createPayment است: payment_url قابل ریدایرکت.
+     */
+    public function createSubscriptionPayment(SubscriptionOrder $order, ?string $gateway = null): array
+    {
+        if ($order->final_amount <= 0) {
+            throw new RuntimeException('مبلغ تراکنش باید بزرگ‌تر از صفر باشد.');
+        }
+
+        try {
+            $gateway = $gateway ?? Gateway::where('is_active', true)->first()?->key ?? 'zarinpal';
+            $gatewayConfigs = get_gateway_configs($gateway);
+
+            // کال‌بک درگاه همان مسیر مشترک پنل است؛ WebPaymentController تشخیص می‌دهد
+            // که تراکنش متعلق به سفارش اشتراک است و آن را به صفحه نتیجه اشتراک هدایت می‌کند.
+            $callbackUrl = URL::route('payment.callback');
+
+            $planName = $order->plan_name;
+
+            $invoice = (new Invoice)
+                ->amount(intval($order->final_amount))
+                ->detail('description', "خرید اشتراک {$planName}")
+                ->detail('subscription_order_id', $order->id)
+                ->detail('subscription_plan_id', $order->subscription_plan_id)
+                ->detail('customer_id', $order->customer_id);
+
+            $payment = Payment::via($gateway)
+                ->config($gatewayConfigs)
+                ->callbackUrl($callbackUrl)
+                ->purchase(
+                    $invoice,
+                    function ($driver, $transactionId) use ($order, $gateway) {
+                        $order->update([
+                            'transaction_id' => $transactionId,
+                            'gateway'        => $gateway,
+                        ]);
+
+                        Log::info('Subscription transaction created', [
+                            'order_id'        => $order->id,
+                            'transaction_id'  => $transactionId,
+                            'gateway'         => $gateway,
+                        ]);
+                    }
+                );
+
+            /** @var \Shetabit\Multipay\RedirectionForm $form */
+            $form = $payment->pay();
+
+            $paymentUrl = $this->resolveFormUrl($form, $order, $gateway, 'payment.form.subscription');
+
+            if (!$paymentUrl) {
+                throw new RuntimeException('دریافت آدرس پرداخت از درگاه ناموفق بود.');
+            }
+
+            $order->update([
+                'payment_url' => $paymentUrl,
+                'status'      => SubscriptionOrder::STATUS_PENDING,
+            ]);
+
+            return [
+                'payment_url'    => $paymentUrl,
+                'transaction_id' => (string) $order->transaction_id,
+                'amount'         => $order->final_amount,
+                'gateway'        => $order->gateway ?? $gateway,
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Subscription payment creation failed', [
+                'order_id' => $order->id,
+                'error'    => $e->getMessage(),
+            ]);
+            throw new RuntimeException('ایجاد تراکنش پرداخت ناموفق بود: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * تأیید پرداخت سفارش اشتراک بعد از بازگشت از درگاه.
+     * توجه: در این مرحله فقط پرداخت تأیید می‌شود؛ فعال‌سازی اشتراک و صدور
+     * لایسنس پکیج‌های همراه، پس از تأیید مدیر (SubscriptionService::approve) انجام می‌شود.
+     *
+     * @return array{paid: bool, order?: SubscriptionOrder, message: string}
+     */
+    public function verifySubscriptionPayment(string $transactionId): array
+    {
+        $order = SubscriptionOrder::where('transaction_id', $transactionId)->first();
+
+        if (!$order) {
+            Log::warning('Subscription order not found for verification', ['transaction_id' => $transactionId]);
+
+            return [
+                'paid'    => false,
+                'message' => 'سفارش اشتراک یافت نشد.',
+            ];
+        }
+
+        if ($order->isPaid()) {
+            return [
+                'paid'    => true,
+                'order'   => $order,
+                'message' => 'این تراکنش قبلاً تأیید شده است.',
+            ];
+        }
+
+        try {
+            $gateway = $order->gateway ?? 'zarinpal';
+            $gatewayConfigs = get_gateway_configs($gateway);
+
+            // برگرداندن Receipt = موفق (همان قرارداد شتابیت این نسخه)
+            Payment::via($gateway)
+                ->config($gatewayConfigs)
+                ->amount($order->final_amount)
+                ->transactionId($transactionId)
+                ->verify();
+
+            $order->markAsPaid($gateway);
+
+            Log::info('Subscription payment verified', [
+                'order_id'        => $order->id,
+                'transaction_id'  => $transactionId,
+                'gateway'         => $gateway,
+            ]);
+
+            return [
+                'paid'    => true,
+                'order'   => $order,
+                'message' => 'پرداخت اشتراک با موفقیت تأیید شد؛ در انتظار تأیید مدیر.',
+            ];
+
+        } catch (InvalidPaymentException $e) {
+            $order->markAsFailed($e->getMessage());
+
+            Log::error('Invalid subscription payment', [
+                'transaction_id' => $transactionId,
+                'order_id'       => $order->id,
+                'error'          => $e->getMessage(),
+            ]);
+
+            return [
+                'paid'  => false,
+                'order' => $order,
+                'message' => 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
+            ];
+
+        } catch (\Exception $e) {
+            $order->markAsFailed($e->getMessage());
+
+            Log::error('Subscription payment verification exception', [
+                'transaction_id' => $transactionId,
+                'order_id'       => $order->id,
+                'error'          => $e->getMessage(),
+            ]);
+
+            return [
+                'paid'  => false,
+                'order' => $order,
+                'message' => 'تأیید پرداخت ناموفق بود: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
      * تبدیل RedirectionForm شتابیت به payment_url قابل استفاده:
      *
      * ۱) درایورهای URL‌محور (GET بدون فیلد، مثل زرین‌پال):
@@ -108,6 +270,16 @@ class PaymentService
      */
     private function resolvePaymentUrl(\Shetabit\Multipay\RedirectionForm $form, PackagePurchase $purchase, string $gateway): string
     {
+        return $this->resolveFormUrl($form, $purchase, $gateway, 'payment.form');
+    }
+
+    /**
+     * پیاده‌سازی مشترک تبدیل فرم به payment_url (خرید پکیج + سفارش اشتراک):
+     *  ۱) درایورهای URL‌محور (GET بدون ورودی) → اکشن فرم
+     *  ۲) درایورهای فرم‌محور POST → HTML فرم در meta + مسیر امضادار (۳۰ دقیقه)
+     */
+    private function resolveFormUrl(\Shetabit\Multipay\RedirectionForm $form, PackagePurchase|SubscriptionOrder $payable, string $gateway, string $routeName): string
+    {
         $action = trim((string) $form->getAction());
         $method = strtoupper((string) $form->getMethod());
         $inputs = $form->getInputs() ?: [];
@@ -119,15 +291,15 @@ class PaymentService
             return $action;
         }
 
-        // درایورهای فرم‌محور: HTML فرم خود-ارسال را ذخیره کن (local در کنترلر صفحه اختصاصی می‌گیرد)
+        // درایورهای فرم‌محور: HTML فرم خود-ارسال را ذخیره کن (local صفحه اختصاصی دارد)
         if ($gateway !== 'local') {
-            $purchase->forceFill(['meta->payment_form' => $form->render()])->save();
+            $payable->forceFill(['meta->payment_form' => $form->render()])->save();
         }
 
         return URL::temporarySignedRoute(
-            'payment.form',
+            $routeName,
             now()->addMinutes(30),
-            ['purchase' => $purchase->id]
+            [$payable instanceof SubscriptionOrder ? 'order' : 'purchase' => $payable->id]
         );
     }
 

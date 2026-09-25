@@ -99,14 +99,26 @@
             </div>
         </div>
         <div class="gw-body">
-            <div class="gw-row">
-                <span class="k">پکیج</span>
-                <span class="v">{{ $package?->name ?? '-' }}</span>
-            </div>
-            <div class="gw-row">
-                <span class="k">طرح</span>
-                <span class="v">{{ $plan?->name ?? '-' }}</span>
-            </div>
+            @if(isset($order) && $order)
+                {{-- سفارش اشتراک --}}
+                <div class="gw-row">
+                    <span class="k">اشتراک</span>
+                    <span class="v">{{ $subscriptionPlan?->name ?? $order->plan_name }}</span>
+                </div>
+                <div class="gw-row">
+                    <span class="k">مدت اعتبار</span>
+                    <span class="v">{{ $subscriptionPlan?->duration_label ?? ($order->meta['plan']['duration_months'] ?? '-') }}</span>
+                </div>
+            @else
+                <div class="gw-row">
+                    <span class="k">پکیج</span>
+                    <span class="v">{{ $package?->name ?? '-' }}</span>
+                </div>
+                <div class="gw-row">
+                    <span class="k">طرح</span>
+                    <span class="v">{{ $plan?->name ?? '-' }}</span>
+                </div>
+            @endif
             <div class="gw-row">
                 <span class="k">شماره تراکنش</span>
                 <span class="v" dir="ltr">{{ $purchase->transaction_id }}</span>

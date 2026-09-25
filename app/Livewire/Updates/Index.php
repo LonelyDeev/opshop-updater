@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Updates;
 
+use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Project;
 use App\Models\Update;
@@ -18,7 +19,7 @@ use Livewire\WithPagination;
 #[Title('آپدیت‌ها')]
 class Index extends Component
 {
-    use WithPagination, WithFileUploads, WithToasts;
+    use WithPagination, WithFileUploads, WithToasts, WithBulkActions;
 
     #[Url]
     public string $search = '';
@@ -31,6 +32,10 @@ class Index extends Component
 
     #[Url]
     public int $project_id = 0;
+
+    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، تاریخ انتشار و… */
+    #[Url]
+    public string $sort = 'newest';
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -59,6 +64,11 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function updatedSort(): void
+    {
+        $this->resetPage();
+    }
+
     #[Computed]
     public function records()
     {
@@ -71,7 +81,12 @@ class Index extends Component
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->when($this->type, fn ($q) => $q->where('type', $this->type))
             ->when($this->project_id, fn ($q) => $q->where('project_id', $this->project_id))
-            ->latest()
+            ->when($this->sort === 'newest', fn ($q) => $q->latest())
+            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
+            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
+            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
+            ->when($this->sort === 'release_newest', fn ($q) => $q->orderByDesc('release_date'))
+            ->when($this->sort === 'release_oldest', fn ($q) => $q->orderByRaw('release_date is null')->orderBy('release_date'))
             ->paginate(12);
     }
 
@@ -82,6 +97,33 @@ class Index extends Component
             ->active()
             ->orderBy('name')
             ->get();
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  Bulk selection (WithBulkActions)                                 */
+    /* ---------------------------------------------------------------- */
+
+    public function bulkPageIds(): array
+    {
+        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    public function deleteSelectedRecords(): void
+    {
+        $ids = array_map('intval', $this->selectedIds);
+
+        $updates = Update::query()->whereIn('id', $ids)->get();
+
+        // حذف فایل فیزیکی هر آپدیت از دیسک local (مثل حذف تکی)
+        foreach ($updates as $update) {
+            if ($update->download_link && Storage::disk('local')->exists($update->download_link)) {
+                Storage::disk('local')->delete($update->download_link);
+            }
+        }
+
+        $count = Update::query()->whereIn('id', $ids)->delete();
+
+        $this->toast(fa_num($count) . ' آپدیت حذف شد.');
     }
 
     /* ---------------------------------------------------------------- */

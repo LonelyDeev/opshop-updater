@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Customers;
 
+use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Customer;
 use Livewire\Attributes\Computed;
@@ -15,13 +16,17 @@ use Livewire\WithPagination;
 #[Title('مشتریان')]
 class Index extends Component
 {
-    use WithPagination, WithToasts;
+    use WithPagination, WithToasts, WithBulkActions;
 
     #[Url]
     public string $search = '';
 
     #[Url]
     public string $status = '';
+
+    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، نام و… */
+    #[Url]
+    public string $sort = 'newest';
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -43,6 +48,11 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function updatedSort(): void
+    {
+        $this->resetPage();
+    }
+
     #[Computed]
     public function records()
     {
@@ -56,7 +66,12 @@ class Index extends Component
                 ->orWhere('website_url', 'like', "%{$this->search}%")
                 ->orWhere('update_code', 'like', "%{$this->search}%")))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
-            ->latest()
+            ->when($this->sort === 'newest', fn ($q) => $q->latest())
+            ->when($this->sort === 'oldest', fn ($q) => $q->oldest())
+            ->when($this->sort === 'id_desc', fn ($q) => $q->orderByDesc('id'))
+            ->when($this->sort === 'id_asc', fn ($q) => $q->orderBy('id'))
+            ->when($this->sort === 'name_asc', fn ($q) => $q->orderBy('name'))
+            ->when($this->sort === 'name_desc', fn ($q) => $q->orderByDesc('name'))
             ->paginate(12);
     }
 
@@ -97,6 +112,25 @@ class Index extends Component
         }
 
         $this->showModal = false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  Bulk selection (WithBulkActions)                                 */
+    /* ---------------------------------------------------------------- */
+
+    public function bulkPageIds(): array
+    {
+        return $this->records->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    public function deleteSelectedRecords(): void
+    {
+        $ids = array_map('intval', $this->selectedIds);
+
+        // اشتراک‌ها/لایسنس‌ها/خریدهای مرتبط با FK cascade حذف می‌شوند
+        $count = Customer::query()->whereIn('id', $ids)->delete();
+
+        $this->toast(fa_num($count) . ' مشتری حذف شد.');
     }
 
     public function delete(): void

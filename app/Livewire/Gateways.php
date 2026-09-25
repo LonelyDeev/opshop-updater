@@ -2,24 +2,38 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Gateway;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('components.layouts.app')]
 #[Title('درگاه‌های پرداخت')]
 class Gateways extends Component
 {
-    use WithToasts;
+    use WithToasts, WithBulkActions;
 
     /** @var array<int, array<string, mixed>> */
     public array $gateways = [];
 
+    /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، ترتیب نمایش و نام */
+    #[Url]
+    public string $sort = 'newest';
+
+    /** آی‌دی درگاه برای حذف تکی */
+    public ?int $deleteId = null;
+
     public function mount(): void
     {
         $this->loadGateways();
+    }
+
+    public function updatedSort(): void
+    {
+        $this->loadGateways(ensure: false);
     }
 
     /* ---------------------------------------------------------------- */
@@ -58,6 +72,50 @@ class Gateways extends Component
         }
 
         $this->toast('تنظیمات درگاه‌های پرداخت با موفقیت ذخیره شد.');
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  Bulk selection (WithBulkActions)                                 */
+    /* ---------------------------------------------------------------- */
+
+    /** آی‌دی همه‌ی درگاه‌های نمایش‌داده‌شده (صفحه‌بندی نداریم) */
+    public function bulkPageIds(): array
+    {
+        return array_map(fn (array $gw) => (string) $gw['id'], $this->gateways);
+    }
+
+    public function deleteSelectedRecords(): void
+    {
+        $ids = array_map('intval', $this->selectedIds);
+
+        $gateways = Gateway::query()->whereIn('id', $ids)->get();
+
+        foreach ($gateways as $gateway) {
+            // FK در gateway_configs از نوع cascade است؛ دستی هم پاک می‌شود برای اطمینان
+            $gateway->configs()->delete();
+            $gateway->delete();
+        }
+
+        $this->loadGateways(ensure: false);
+
+        $this->toast(fa_num(count($gateways)) . ' درگاه حذف شد.');
+    }
+
+    /** حذف تکی درگاه */
+    public function delete(): void
+    {
+        $gateway = Gateway::findOrFail($this->deleteId ?? 0);
+
+        $label = static::schema()[$gateway->key]['label'] ?? $gateway->name;
+
+        // FK در gateway_configs از نوع cascade است؛ دستی هم پاک می‌شود برای اطمینان
+        $gateway->configs()->delete();
+        $gateway->delete();
+
+        $this->deleteId = null;
+        $this->loadGateways(ensure: false);
+
+        $this->toast("درگاه «{$label}» حذف شد.");
     }
 
     public function render()
@@ -123,20 +181,25 @@ class Gateways extends Component
 
     /**
      * بارگذاری درگاه‌ها از دیتابیس (پورت SettingController@showGateways).
+     *
+     * @param  bool  $ensure  درگاه‌های پشتیبانی‌شده از پیکربندی سیستم ساخته شوند؟
+     *                        (بعد از حذف، تا رفرش بعدی صفحه false پاس می‌شود)
      */
-    protected function loadGateways(): void
+    protected function loadGateways(bool $ensure = true): void
     {
         // اطمینان از وجود همه درگاه‌های پشتیبانی‌شده
-        foreach (config('general.supported_gateways') as $key => $name) {
-            Gateway::firstOrCreate(
-                ['key' => $key],
-                ['name' => $name]
-            );
+        if ($ensure) {
+            foreach (config('general.supported_gateways') as $key => $name) {
+                Gateway::firstOrCreate(
+                    ['key' => $key],
+                    ['name' => $name]
+                );
+            }
         }
 
         $rows = Gateway::query()->with('configs')->get()->keyBy('key');
 
-        $this->gateways = [];
+        $list = [];
 
         foreach (static::schema() as $key => $meta) {
             $gateway = $rows->get($key);
@@ -152,14 +215,35 @@ class Gateways extends Component
                 $configs[$field['name']] = (string) ($stored[$field['name']] ?? '');
             }
 
-            $this->gateways[] = [
+            $list[] = [
                 'id' => (int) $gateway->id,
                 'key' => (string) $gateway->key,
                 'name' => (string) $gateway->name,
                 'ordering' => $gateway->ordering,
                 'is_active' => (bool) $gateway->is_active,
                 'configs' => $configs,
+                // فقط برای مرتب‌سازی (قبل از انتساب حذف می‌شوند)
+                '_created' => $gateway->created_at?->getTimestamp() ?? 0,
+                '_schema' => count($list),
             ];
         }
+
+        // اعمال ترتیب نمایش — «newest» ترتیب قبلی (اسکیما) را با تاریخ ساخت حفظ می‌کند
+        usort($list, function (array $a, array $b): int {
+            return match ($this->sort) {
+                'oldest' => [$a['_created'], $a['_schema']] <=> [$b['_created'], $b['_schema']],
+                'id_desc' => $b['id'] <=> $a['id'],
+                'id_asc' => $a['id'] <=> $b['id'],
+                'ordering_asc' => [$a['ordering'] ?? PHP_INT_MAX, $a['_schema']] <=> [$b['ordering'] ?? PHP_INT_MAX, $b['_schema']],
+                'name_asc' => [strnatcasecmp($a['name'], $b['name']), $a['_schema']] <=> [strnatcasecmp($b['name'], $b['name']), $b['_schema']],
+                default => [$b['_created'], $a['_schema']] <=> [$a['_created'], $b['_schema']],
+            };
+        });
+
+        // کلیدهای کمکی مرتب‌سازی کنار گذاشته می‌شوند
+        $this->gateways = array_map(
+            fn (array $gw) => array_filter($gw, fn ($value, $key) => ! str_starts_with((string) $key, '_'), ARRAY_FILTER_USE_BOTH),
+            $list
+        );
     }
 }

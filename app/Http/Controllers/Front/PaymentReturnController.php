@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
 use App\Models\PackagePurchase;
+use App\Models\SubscriptionOrder;
 use App\Services\PaymentService;
+use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 
 /**
@@ -24,7 +26,8 @@ class PaymentReturnController extends Controller
     ];
 
     public function __construct(
-        private PaymentService $paymentService
+        private PaymentService $paymentService,
+        private SubscriptionService $subscriptionService
     ) {}
 
     public function show(Request $request, PackagePurchase $purchase)
@@ -108,15 +111,113 @@ class PaymentReturnController extends Controller
     }
 
     /**
+     * نسخه‌ی اشتراک: صفحه نتیجه پرداختِ سفارش اشتراک (payment/return/subscription/{order}).
+     * برای سفارش‌های API (callback_url بیرونی): وضعیت + شمارش معکوس + بازگشت به فروشگاه.
+     */
+    public function showSubscription(Request $request, SubscriptionOrder $order)
+    {
+        $order->load([
+            'plan:id,name,slug,duration_months',
+            'customer:id,name',
+            'subscription:id,status',
+        ]);
+
+        // اگر پرداخت هنوز pending است، یک‌بار تأیید را امتحان می‌کنیم
+        if ($order->status === SubscriptionOrder::STATUS_PENDING && $order->transaction_id) {
+            $this->subscriptionService->verifyPayment($order->transaction_id);
+            $order->refresh();
+        }
+
+        [$returnUrl, $returnHost, $isInternal] = $this->resolveSubscriptionReturnTarget($request, $order);
+
+        $months = (int) ($order->plan?->duration_months ?? $order->meta['plan']['duration_months'] ?? null);
+        $planDuration = $months === null ? null : ($months === 0 ? 'نامحدود' : fa_num($months) . ' ماه');
+
+        return view('payment.return-subscription', [
+            'order'         => $order,
+            'status'        => $order->status, // paid | failed | pending
+            'message'       => $this->subscriptionStatusMessage($order),
+            'gatewayName'   => config("general.supported_gateways.{$order->gateway}") ?? $order->gateway,
+            'planDuration'  => $planDuration,
+            'packagesCount' => count($order->meta['plan']['packages'] ?? []),
+            'returnUrl'     => $returnUrl,
+            'returnHost'    => $returnHost,
+            'isInternal'    => $isInternal,
+            'seconds'       => 10,
+        ]);
+    }
+
+    /**
+     * مقصد نهایی بازگشت برای سفارش اشتراک (قرارداد مشابه خرید پکیج):
+     *  - سفارش API (callback_url بیرونی) → همان آدرس + پارامترهای وضعیت/تراکنش
+     *  - سفارش وب پنل یا callback داخلی → صفحه نتیجه اشتراک (بدون حلقه)
+     *
+     * @return array{0: string, 1: ?string, 2: bool} [url, host, isInternal]
+     */
+    private function resolveSubscriptionReturnTarget(Request $request, SubscriptionOrder $order): array
+    {
+        $callback = $order->callback_url;
+
+        if (!$callback || $this->isInternalCallback($callback)) {
+            $url = route('subscription.result', $order);
+
+            return [$url, null, true];
+        }
+
+        $status = match ($order->status) {
+            SubscriptionOrder::STATUS_PAID   => 'success',
+            SubscriptionOrder::STATUS_FAILED => 'failed',
+            default                          => 'pending',
+        };
+
+        $params = [
+            'transaction_id' => $order->transaction_id,
+            'status'         => $status,
+        ];
+
+        if ($order->isPaid()) {
+            $params['order_id']       = $order->id;
+            $params['admin_status']   = $order->admin_status;
+            $params['subscription_id'] = $order->subscription_id;
+        } else {
+            $params['error'] = $order->meta['fail_reason'] ?? 'پرداخت ناموفق بود.';
+        }
+
+        foreach (self::FORWARD_KEYS as $key) {
+            if ($request->filled($key) && !array_key_exists($key, $params)) {
+                $params[$key] = $request->input($key);
+            }
+        }
+
+        $separator = str_contains($callback, '?') ? '&' : '?';
+
+        return [
+            $callback . $separator . http_build_query($params),
+            parse_url($callback, PHP_URL_HOST) ?: $callback,
+            false,
+        ];
+    }
+
+    private function subscriptionStatusMessage(SubscriptionOrder $order): string
+    {
+        return match ($order->status) {
+            SubscriptionOrder::STATUS_PAID   => 'پرداخت شما تأیید شد؛ درخواست اشتراک ثبت شد و پس از تأیید مدیر، اشتراک و دسترسی‌های پکیج‌ها فعال می‌شود.',
+            SubscriptionOrder::STATUS_FAILED => $order->meta['fail_reason'] ?? 'متأسفانه پرداخت شما تأیید نشد؛ مبلغی از حساب شما کسر نشده است.',
+            default                          => 'پرداخت هنوز توسط درگاه تأیید نشده است. پس از بازگشت به فروشگاه، وضعیت تراکنش بررسی می‌شود.',
+        };
+    }
+
+    /**
      * آیا callback_url به یکی از مسیرهای کال‌بک خود پنل اشاره می‌کند؟
      * (برای جلوگیری از حلقه‌ی بی‌نهایت، این موارد به صفحه‌ی نتیجه‌ی خود پنل هدایت می‌شوند)
      */
     private function isInternalCallback(string $url): bool
     {
-        $given = [parse_url($url, PHP_URL_HOST), rtrim((string) parse_url($url, PHP_URL_PATH), '/')];
+        // هاست + پورت (پورت را هم مقایسه می‌کنیم تا localhost:3001 با localhost:8000 یکی تلقی نشود)
+        $given = [$this->hostWithPort($url), rtrim((string) parse_url($url, PHP_URL_PATH), '/')];
 
         foreach ([route('payment.callback'), route('api.packages.payment.callback')] as $panelUrl) {
-            $panel = [parse_url($panelUrl, PHP_URL_HOST), rtrim((string) parse_url($panelUrl, PHP_URL_PATH), '/')];
+            $panel = [$this->hostWithPort($panelUrl), rtrim((string) parse_url($panelUrl, PHP_URL_PATH), '/')];
 
             if ($given === $panel) {
                 return true;
@@ -133,5 +234,14 @@ class PaymentReturnController extends Controller
             PackagePurchase::STATUS_FAILED => $purchase->meta['fail_reason'] ?? 'متأسفانه پرداخت شما تأیید نشد؛ مبلغی از حساب شما کسر نشده است.',
             default                        => 'پرداخت هنوز توسط درگاه تأیید نشده است. پس از بازگشت به فروشگاه، وضعیت تراکنش بررسی می‌شود.',
         };
+    }
+
+    /** هاست به‌همراه پورت (اگر وجود داشته باشد) برای مقایسه‌ی دقیق‌تر callback_url */
+    private function hostWithPort(string $url): string
+    {
+        $host = (string) parse_url($url, PHP_URL_HOST);
+        $port = parse_url($url, PHP_URL_PORT);
+
+        return $port ? $host . ':' . $port : $host;
     }
 }

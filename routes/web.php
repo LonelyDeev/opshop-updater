@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', \App\Livewire\Shop\Home::class)->name('shop.home');
 Route::get('packages/{slug}', \App\Livewire\Shop\PackageShow::class)->name('shop.package');
 
+// طرح‌های اشتراک (فروش عمومی + نتیجه خرید اشتراک)
+Route::get('subscriptions', \App\Livewire\Shop\SubscriptionsIndex::class)->name('shop.subscriptions');
+Route::get('subscription/result/{order}', \App\Livewire\Shop\SubscriptionResult::class)->name('subscription.result');
+
 // پرداخت (عمومی)
 Route::get('payment/callback', [\App\Http\Controllers\Front\WebPaymentController::class, 'callback'])->name('payment.callback');
 Route::post('payment/callback', [\App\Http\Controllers\Front\WebPaymentController::class, 'callback'])->name('payment.callback.post');
@@ -22,10 +26,19 @@ Route::get('payment/result/{purchase}', \App\Livewire\Shop\PaymentResult::class)
 Route::get('payment/return/{purchase}', [\App\Http\Controllers\Front\PaymentReturnController::class, 'show'])
     ->name('payment.return');
 
+// همان صفحه برای سفارش‌های اشتراک (API با callback_url بیرونی)
+Route::get('payment/return/subscription/{order}', [\App\Http\Controllers\Front\PaymentReturnController::class, 'showSubscription'])
+    ->name('payment.return.subscription');
+
 // فرم پرداخت درایورهای فرم‌محور + شبیه‌ساز درگاه آزمایشی (local)
 // payment_url خریدهای API برای این درایورها به این مسیر امضادار اشاره می‌کند.
 Route::get('payment/form/{purchase}', [\App\Http\Controllers\Front\PaymentFormController::class, 'show'])
     ->name('payment.form')
+    ->middleware('signed');
+
+// همان فرم برای سفارش‌های اشتراک
+Route::get('payment/form/subscription/{order}', [\App\Http\Controllers\Front\PaymentFormController::class, 'showSubscription'])
+    ->name('payment.form.subscription')
     ->middleware('signed');
 
 // مسیر عمومی دانلود آپدیت (بدون احراز هویت)
@@ -54,6 +67,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     Route::get('purchases/{purchase}', \App\Livewire\Purchases\Show::class)->name('purchases.show');
     Route::get('customers', \App\Livewire\Customers\Index::class)->name('customers.index');
     Route::get('subscriptions', \App\Livewire\Subscriptions\Index::class)->name('subscriptions.index');
+
+    // طرح‌های اشتراک + درخواست‌ها/تأییدها
+    Route::get('subscription-plans', \App\Livewire\Plans\Index::class)->name('plans.index');
+    Route::get('subscription-orders', \App\Livewire\Subscriptions\Orders::class)->name('subscriptions.orders');
 
     // سیستم
     Route::get('reports', \App\Livewire\Reports\Index::class)->name('reports.index');
