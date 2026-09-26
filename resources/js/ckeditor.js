@@ -37,6 +37,7 @@ document.addEventListener('alpine:init', () => {
         unwatchMorph: null,
         markerObserver: null,
         visibilityObserver: null,
+        _syncTimer: null,
 
         async init() {
             const textarea = this.$refs.target;
@@ -98,7 +99,12 @@ document.addEventListener('alpine:init', () => {
             });
 
             this.instance.setData(textarea.value || '');
-            this.instance.on('change', () => this.sync());
+            /* PERF: هر keystroke فوراً getData() (پارس کل سند) نمی‌زنیم؛ ۲۵۰ms صف می‌شود.
+               blur/mode-change/save مسیر فوری sync() دارند. */
+            this.instance.on('change', () => this.queueSync());
+            /* PERF: اگر کاربر در میانه‌ی debounce سریع ذخیره بزند، خروج از ادیتور
+               صف معلق را فوراً فلوش می‌کند تا آخرین تایپ‌ها گم نشوند. */
+            this.instance.on('blur', () => this.flushSync());
 
             /* FIX (ذخیره نشدن HTML در حالت Source): پلاگین sourcearea رویداد change
                نمی‌دهد → textarea مخفی wire:model هرگز آپدیت نمی‌شد. با شنونده mode،
@@ -144,10 +150,27 @@ document.addEventListener('alpine:init', () => {
             const source = holder && holder.querySelector ? holder.querySelector('textarea.cke_source') : null;
             if (!source || source.dataset.ckSynced) return;
             source.dataset.ckSynced = '1';
-            const flush = () => this.sync();
-            source.addEventListener('input', flush);
-            source.addEventListener('change', flush);
-            source.addEventListener('blur', flush);
+            /* PERF: تایپ در Source هم مثل WYSIWYG debounce می‌شود؛ blur فوری sync می‌زند
+               (شنونده mode هنگام خروج از source هم فوراً sync می‌کند، پس امن است). */
+            source.addEventListener('input', () => this.queueSync());
+            source.addEventListener('change', () => this.queueSync());
+            source.addEventListener('blur', () => this.flushSync());
+        },
+
+        /* PERF: هر keystroke فوراً getData() (پارس کل سند) نمی‌زنیم؛ ۲۵۰ms صف می‌شود.
+           blur/mode-change/save مسیر فوری sync() دارند. */
+        queueSync() {
+            if (this._syncTimer) clearTimeout(this._syncTimer);
+            this._syncTimer = setTimeout(() => { this._syncTimer = null; this.sync(); }, 250);
+        },
+
+        /* فلوش فوری صف debounce — برای blur (قبل از کلیک ذخیره/تعویض focus) */
+        flushSync() {
+            if (this._syncTimer) {
+                clearTimeout(this._syncTimer);
+                this._syncTimer = null;
+            }
+            this.sync();
         },
 
         /* editor → Livewire property (textarea + input event for wire:model) */
@@ -176,6 +199,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         destroy() {
+            if (this._syncTimer) clearTimeout(this._syncTimer); /* PERF: صف debounce معلق را دور بریز */
             this.unwatchMorph?.();
             this.markerObserver?.disconnect();
             this.visibilityObserver?.disconnect();

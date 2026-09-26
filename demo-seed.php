@@ -17,6 +17,7 @@ use App\Models\PackageVersion;
 use App\Models\Project;
 use App\Models\Subscription;
 use App\Models\SubscriptionOrder;
+use App\Models\User;
 use App\Models\SubscriptionPlan;
 use App\Models\Update;
 use Illuminate\Support\Str;
@@ -325,6 +326,12 @@ if ($grantPkg) {
         'notes'           => 'دسترسی رایگان از طریق اشتراک «' . $basicPlan->name . '».',
     ]);
 }
+
+// ---------- admin user (برای ورود اولیه پنل) ----------
+User::updateOrCreate(
+    ['email' => 'admin@panel.test'],
+    ['name' => 'مدیر سیستم', 'password' => bcrypt('secret123'), 'status' => 'active'],
+);
 
 echo "Demo data seeded OK\n";
 echo 'Projects: ' . Project::count() . ' | Packages: ' . Package::count() . ' | Versions: ' . PackageVersion::count()

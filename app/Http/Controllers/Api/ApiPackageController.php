@@ -8,9 +8,11 @@ use App\Models\Package;
 use App\Models\PackageLicense;
 use App\Models\PackagePricingPlan;
 use App\Models\PackagePurchase;
+use App\Models\Subscription;
 use App\Services\LicenseService;
 use App\Services\PackageApiAuthService;
 use App\Services\PaymentService;
+use App\Services\SubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -21,7 +23,8 @@ class ApiPackageController extends Controller
     public function __construct(
         private PackageApiAuthService $authService,
         private PaymentService $paymentService,
-        private LicenseService $licenseService
+        private LicenseService $licenseService,
+        private SubscriptionService $subscriptionService
     ) {}
 
     /* ===================================================================
@@ -29,6 +32,8 @@ class ApiPackageController extends Controller
      *  لیست پکیج‌های قابل دسترس برای این مشتری (پکیج‌های پروژه‌ای که مشتری اشتراک دارد)
      *  + پرچم is_purchased برای هر پکیج (لایسنس فعال دارد؟) تا پروژه خریدار
      *    بتواند به‌جای «خرید»، دکمه «دانلود» نمایش دهد.
+     *  + بلوک subscription برای هر آیتم و subscription_summary در سطح پاسخ:
+     *    پکیج‌هایی که با اشتراک فعالِ طرح‌محور مشتری «رایگان»‌اند.
      * =================================================================== */
     public function index(Request $request): JsonResponse
     {
@@ -63,9 +68,19 @@ class ApiPackageController extends Controller
                 $packages->getCollection()->pluck('id')->all()
             );
 
+            // اشتراک فعالِ طرح‌محور مشتری + نقشه پکیج‌های پوشش‌داده‌شده (یک کوئری)
+            [$coverage, $summarySubscription] = $this->subscriptionCoverage($customer);
+
             return response()->json([
-                'data' => $packages->getCollection()->map(function (Package $package) use ($licenses) {
-                    return $this->appendPurchaseInfo($package, $licenses->get($package->id));
+                'data' => $packages->getCollection()->map(function (Package $package) use ($licenses, $coverage) {
+                    $license = $licenses->get($package->id);
+                    $covered = $coverage[$package->id] ?? null;
+
+                    return $this->appendPurchaseInfo(
+                        $package,
+                        $license,
+                        $covered ? $this->subscriptionInfoFor($covered['subscription'], $package, $license) : null
+                    );
                 })->values(),
                 'meta' => [
                     'current_page' => $packages->currentPage(),
@@ -73,6 +88,8 @@ class ApiPackageController extends Controller
                     'total'        => $packages->total(),
                     'per_page'     => $packages->perPage(),
                 ],
+                // خلاصه اشتراک فعالِ طرح‌محور (کنار meta)
+                'subscription_summary' => $this->subscriptionSummary($summarySubscription),
             ]);
         } catch (RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
@@ -114,11 +131,14 @@ class ApiPackageController extends Controller
             // اگر لایسنس فعلی دارد، اطلاعاتش رو برمی‌گردانیم
             $license = $this->authService->getActiveLicense($customer, $slug);
 
+            // این پکیج با اشتراک فعالِ طرح‌محور مشتری رایگان است؟
+            $coveringSubscription = $this->subscriptionService->activeSubscriptionCovering($customer, $package);
+            $subscriptionInfo = $coveringSubscription
+                ? $this->subscriptionInfoFor($coveringSubscription, $package, $license)
+                : null;
+
             return response()->json([
-                'data' => $this->appendPurchaseInfo(
-                    $package,
-                    $license ? collect([$license->package_id => $license])->get($package->id) : null
-                ),
+                'data' => $this->appendPurchaseInfo($package, $license, $subscriptionInfo),
             ]);
         } catch (RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
@@ -128,9 +148,13 @@ class ApiPackageController extends Controller
     /* ===================================================================
      *  POST /api/v1/packages/{slug}/purchase
      *  ایجاد درخواست خرید و دریافت payment_url
-     *  Body: { callback_url, pricing_plan_id, gateway? }
+     *  Body: { callback_url?, pricing_plan_id?, gateway? }
      *  Response: { payment_url, transaction_id, amount, gateway, purchase_id }
      *  - پکیج/طرح رایگان: { is_free, license_key, expires_at, download_token }
+     *  - ⭐ پکیجِ پوشش‌داده‌شده با اشتراک فعالِ طرح‌محور: بدون درگاه و بدون نیاز به
+     *    pricing_plan_id/callback_url → مستقیم لایسنس رایگان:
+     *    { is_free: true, via_subscription: true, plan, license_key, expires_at,
+     *      days_remaining, download_token, message } (idempotent برای لایسنس موجود)
      *  - gateway اختیاری است (پیش‌فرض zarinpal)؛ کلاینت می‌تواند درگاه فعال دیگری
      *    را انتخاب کند (مثلاً «local» برای تست جریان پرداخت).
      *  - payment_url برای درایورهای URL مستقیم است؛ برای درایورهای فرم‌محور
@@ -139,8 +163,8 @@ class ApiPackageController extends Controller
     public function purchase(Request $request, string $slug): JsonResponse
     {
         $request->validate([
-            'callback_url'    => 'required|url',
-            'pricing_plan_id' => 'required|exists:package_pricing_plans,id',
+            'callback_url'    => 'nullable|url',
+            'pricing_plan_id' => 'nullable|exists:package_pricing_plans,id',
             'gateway'         => 'nullable|string|max:32',
         ]);
 
@@ -170,6 +194,50 @@ class ApiPackageController extends Controller
 
             if (!$package) {
                 return response()->json(['error' => 'پکیج یافت نشد.'], 404);
+            }
+
+            // ---------- ⭐ مسیر اشتراک فعال: پکیجِ همراهِ طرح → رایگان، بدون درگاه ----------
+            $subscription = $this->subscriptionService->activeSubscriptionCovering($customer, $package);
+
+            if ($subscription) {
+                $plan    = $subscription->plan;
+                $covered = $plan?->packages->firstWhere('id', $package->id);
+                $freeMonths = (int) ($covered?->pivot->free_months ?? 1);
+
+                $latestVersion = $package->latestVersion()->first();
+                if (!$latestVersion) {
+                    return response()->json(['error' => 'نسخه فعالی برای این پکیج وجود ندارد.'], 422);
+                }
+
+                // idempotent: لایسنس فعال موجود → همان لایسنس برمی‌گردد
+                $license = $this->authService->getActiveLicense($customer, $slug);
+
+                if (!$license) {
+                    $license = $subscription->order
+                        ? $this->subscriptionService->grantPackageAccess($customer, $package, $freeMonths, $subscription->order)
+                        : $this->subscriptionService->grantFreeAccess(
+                            $customer,
+                            $package,
+                            $freeMonths,
+                            'دسترسی رایگان از طریق اشتراک «' . ($plan?->name ?? 'طرح اشتراک') . '» (API).'
+                        );
+                }
+
+                return response()->json([
+                    'is_free'          => true,
+                    'via_subscription' => true,
+                    'plan'             => $plan?->name,
+                    'license_key'      => $license->license_key,
+                    'expires_at'       => $license->expires_at?->toDateTimeString(),
+                    'days_remaining'   => $license->days_remaining,
+                    'download_token'   => $this->createDownloadToken($license, $latestVersion, $customer),
+                    'message'          => 'این پکیج با اشتراک فعال شما رایگان است.',
+                ]);
+            }
+
+            // ---------- مسیر عادی خرید ----------
+            if (!$request->filled('pricing_plan_id')) {
+                return response()->json(['error' => 'انتخاب طرح قیمت‌گذاری الزامی است.'], 422);
             }
 
             $plan = PackagePricingPlan::where('id', $request->pricing_plan_id)
@@ -213,6 +281,12 @@ class ApiPackageController extends Controller
                     'download_token' => $this->createDownloadToken($license, $latestVersion, $customer),
                 ]);
             }
+
+            // مسیر پولی: بازگشت از درگاه به سایت مشتری الزامی است
+            if (!$request->filled('callback_url')) {
+                return response()->json(['error' => 'آدرس بازگشت (callback_url) برای پرداخت الزامی است.'], 422);
+            }
+
             // ایجاد رکورد purchase
             $purchase = PackagePurchase::create([
                 'package_id'      => $package->id,
@@ -461,10 +535,87 @@ class ApiPackageController extends Controller
     }
 
     /* ===================================================================
+     *  Helper - اشتراک‌های فعالِ طرح‌محور مشتری + نقشه پکیج‌های پوشش‌داده‌شده
+     *  (یک کوئری؛ کلید نقشه = package_id، اولین اشتراک فعال ملاک است)
+     * =================================================================== */
+    private function subscriptionCoverage(Customer $customer): array
+    {
+        $subs = $customer->subscriptions()
+            ->whereNotNull('subscription_plan_id')
+            ->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->with('plan.packages')
+            ->get();
+
+        $coverage = [];
+        foreach ($subs as $sub) {
+            foreach ($sub->plan?->packages ?? [] as $pkg) {
+                if (!array_key_exists($pkg->id, $coverage)) {
+                    $coverage[$pkg->id] = [
+                        'subscription' => $sub,
+                        'free_months'  => (int) ($pkg->pivot->free_months ?? 1),
+                    ];
+                }
+            }
+        }
+
+        return [$coverage, $subs->first()];
+    }
+
+    /* ===================================================================
+     *  Helper - بلوک اطلاعات اشتراک برای یک پکیجِ پوشش‌داده‌شده (فیلد subscription)
+     * =================================================================== */
+    private function subscriptionInfoFor(Subscription $subscription, Package $package, ?PackageLicense $license): array
+    {
+        $plan     = $subscription->plan;
+        $covered  = $plan?->packages->firstWhere('id', $package->id);
+
+        return [
+            'is_free_with_subscription' => true,
+            'plan_name'                 => $plan?->name,
+            'plan_slug'                 => $plan?->slug,
+            'subscription_expires_at'   => $subscription->expires_at?->toDateTimeString(),
+            'days_remaining'            => $subscription->expires_at !== null
+                ? (int) max(0, now()->diffInDays($subscription->expires_at))
+                : null,
+            'free_months'               => (int) ($covered?->pivot->free_months ?? 1),
+            // لایسنس صادرشده برای این پکیج (اگر لایسنس فعال وجود دارد)
+            'license_key'               => $license?->license_key,
+        ];
+    }
+
+    /* ===================================================================
+     *  Helper - خلاصه اشتراک فعالِ طرح‌محور (سطح پاسخ، کنار meta)
+     * =================================================================== */
+    private function subscriptionSummary(?Subscription $subscription): array
+    {
+        if (!$subscription) {
+            return [
+                'has_active_subscription' => false,
+                'plan_name'               => null,
+                'expires_at'              => null,
+                'days_remaining'          => null,
+            ];
+        }
+
+        return [
+            'has_active_subscription' => true,
+            'plan_name'               => $subscription->plan?->name,
+            'expires_at'              => $subscription->expires_at?->toDateTimeString(),
+            'days_remaining'          => $subscription->expires_at !== null
+                ? (int) max(0, now()->diffInDays($subscription->expires_at))
+                : null,
+        ];
+    }
+
+    /* ===================================================================
      *  Helper - افزودن اطلاعات خرید/لایسنس به خروجی پکیج
      *  is_purchased => true یعنی پروژه خریدار باید دکمه «دانلود» نشان دهد
+     *  subscription => بلوک اشتراک فعال (پکیج رایگانِ طرح) یا null
      * =================================================================== */
-    private function appendPurchaseInfo(Package $package, ?PackageLicense $license): array
+    private function appendPurchaseInfo(Package $package, ?PackageLicense $license, ?array $subscriptionInfo = null): array
     {
         return array_merge($package->toArray(), [
             'is_purchased' => $license !== null,
@@ -480,6 +631,8 @@ class ApiPackageController extends Controller
                 'expires_at'     => $license->expires_at?->toDateTimeString(),
                 'days_remaining' => $license->days_remaining,
             ] : null,
+            // پکیجِ رایگانِ طرحِ اشتراک فعال (null = پوشش داده نمی‌شود)
+            'subscription' => $subscriptionInfo,
         ]);
     }
 

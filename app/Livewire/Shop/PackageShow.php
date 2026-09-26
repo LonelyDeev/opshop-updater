@@ -6,10 +6,14 @@ use App\Livewire\Concerns\WithToasts;
 use App\Models\Customer;
 use App\Models\Gateway;
 use App\Models\Package;
+use App\Models\PackageLicense;
 use App\Models\PackagePricingPlan;
 use App\Models\PackagePurchase;
+use App\Models\Subscription;
 use App\Services\LicenseService;
 use App\Services\PaymentService;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -117,24 +121,53 @@ class PackageShow extends Component
             && $plan->final_price <= 0;
     }
 
+    /** اشتراک فعالِ طرح‌محور مشتریِ session (با plan و packages) یا null */
+    #[Computed]
+    public function myActiveSubscription()
+    {
+        $code = trim((string) session('shop_update_code', ''));
+
+        if ($code === '') {
+            return null;
+        }
+
+        $customer = Customer::query()
+            ->where('update_code', $code)
+            ->where('status', 'active')
+            ->first();
+
+        return $customer ? $this->findActivePlanSubscription($customer) : null;
+    }
+
+    /** آیا این پکیج با طرحِ اشتراک فعالِ session برای مشتری رایگان است؟ */
+    #[Computed]
+    public function isCoveredBySubscription(): bool
+    {
+        // پکیج رایگان از قبل رایگان است؛ نشان اشتراک نمی‌خواهد
+        if ($this->package->is_free) {
+            return false;
+        }
+
+        $plan = $this->myActiveSubscription?->plan;
+
+        if (!$plan) {
+            return false;
+        }
+
+        return $plan->packages->contains(fn ($pkg) => $pkg->id === $this->package->id);
+    }
+
     /* ---------------------------------------------------------------- */
     /*  Buy                                                              */
     /* ---------------------------------------------------------------- */
 
     public function buy(PaymentService $paymentService, LicenseService $licenseService): void
     {
-        $rules = [
+        // ---- کد آپدیت ----
+        $this->validate([
             'updateCode' => ['required', 'string', 'max:64'],
-        ];
-
-        // پکیج غیر رایگان که طرح دارد → انتخاب طرح الزامی است
-        if (!$this->package->is_free && $this->plans->isNotEmpty()) {
-            $rules['planId'] = ['required'];
-        }
-
-        $this->validate($rules, [
+        ], [
             'updateCode.required' => 'کد آپدیت الزامی است.',
-            'planId.required'     => 'لطفاً طرح قیمت‌گذاری را انتخاب کنید.',
         ]);
 
         // ---- مشتری ----
@@ -152,7 +185,26 @@ class PackageShow extends Component
             return;
         }
 
+        // ---- شاخه اشتراک فعال: این پکیج با طرحِ همین مشتری رایگان است ----
+        // (قبل از الزام انتخاب طرح — قواعد planId نباید مسیر رایگان اشتراک را ببندند)
+        $subscription = $this->findActivePlanSubscription($customer);
+        if (
+            $subscription?->plan
+            && !$this->package->is_free
+            && $subscription->plan->packages->contains(fn ($pkg) => $pkg->id === $this->package->id)
+        ) {
+            $this->fulfillWithSubscription($customer, $subscription);
+            return;
+        }
+
         // ---- طرح ----
+        // (validate با آرایهٔ خالی در Livewire 3 به دنبال rules() می‌گردد → فقط وقتی قاعده داریم صدا می‌زنیم)
+        if (!$this->package->is_free && $this->plans->isNotEmpty()) {
+            $this->validate(['planId' => ['required']], [
+                'planId.required' => 'لطفاً طرح قیمت‌گذاری را انتخاب کنید.',
+            ]);
+        }
+
         /** @var \App\Models\PackagePricingPlan|null $plan */
         $plan = null;
         if ($this->planId !== '') {
@@ -242,6 +294,110 @@ class PackageShow extends Component
         }
 
         $this->redirect($payment['payment_url'], navigate: false);
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  دریافت رایگان با اشتراک فعال (بدون درگاه)                        */
+    /* ---------------------------------------------------------------- */
+
+    /**
+     * دریافت رایگان این پکیج برای مشتریِ دارای اشتراک فعالِ طرح‌محور.
+     *
+     * - اگر لایسنس فعال دارد → فقط توست (idempotent، بدون تغییر DB).
+     * - وگرنه خرید رایگان (amount=0, paid) + صدور/تمدید لایسنس با مدتِ pivot
+     *   (کپی الگوی SubscriptionService::grantPackageAccess — عمداً مستقل نوشته
+     *   شده تا به آن سرویس وابسته نباشد) + ریدایرکت به صفحه نتیجه.
+     */
+    protected function fulfillWithSubscription(Customer $customer, Subscription $subscription): void
+    {
+        // idempotent — لایسنس فعال موجود؟ هیچ تغییری در DB ایجاد نمی‌شود
+        $activeLicense = PackageLicense::query()
+            ->where('customer_id', $customer->id)
+            ->where('package_id', $this->package->id)
+            ->where('status', PackageLicense::STATUS_ACTIVE)
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->latest('id')
+            ->first();
+
+        if ($activeLicense) {
+            $this->toast('این پکیج از قبل با اشتراک شما فعال است.');
+            return;
+        }
+
+        // ---- نسخه ----
+        $latestVersion = $this->package->latestVersion()->first();
+
+        if (!$latestVersion) {
+            $this->toast('نسخه فعالی برای این پکیج وجود ندارد.', 'error');
+            return;
+        }
+
+        $plan = $subscription->plan;
+        $freeMonths = (int) ($plan->packages->firstWhere('id', $this->package->id)?->pivot->free_months ?? 1);
+
+        // ---- خرید رایگان (بدون درگاه) ----
+        $purchase = PackagePurchase::create([
+            'package_id'      => $this->package->id,
+            'version_id'      => $latestVersion->id,
+            'pricing_plan_id' => null,
+            'customer_id'     => $customer->id,
+            'amount'          => 0,
+            'status'          => PackagePurchase::STATUS_PAID,
+            'paid_at'         => now(),
+        ]);
+
+        // ---- صدور/تمدید لایسنس رایگان با مدتِ طرح (pivot free_months) ----
+        $license = DB::transaction(function () use ($customer, $freeMonths, $plan) {
+            $existing = PackageLicense::query()
+                ->where('package_id', $this->package->id)
+                ->where('customer_id', $customer->id)
+                ->whereIn('status', [PackageLicense::STATUS_ACTIVE, PackageLicense::STATUS_EXPIRED])
+                ->latest('id')
+                ->first();
+
+            $startsAt = now();
+            $baseDate = ($existing && $existing->isActive() && $existing->expires_at)
+                ? Carbon::parse($existing->expires_at)
+                : now();
+            $expiresAt = $freeMonths > 0 ? (clone $baseDate)->addMonths($freeMonths) : null;
+
+            $license = PackageLicense::create([
+                'license_key'     => PackageLicense::generateKey(),
+                'package_id'      => $this->package->id,
+                'customer_id'     => $customer->id,
+                'renewed_from'    => $existing?->id,
+                'status'          => PackageLicense::STATUS_ACTIVE,
+                'starts_at'       => $startsAt,
+                'expires_at'      => $expiresAt,
+                'duration_months' => $freeMonths,
+                'notes'           => 'دسترسی رایگان از طریق اشتراک «' . $plan->name . '».',
+            ]);
+
+            if ($existing) {
+                $existing->update(['status' => PackageLicense::STATUS_REVOKED]);
+            }
+
+            return $license;
+        });
+
+        $license->update(['purchase_id' => $purchase->id]);
+
+        session()->put('shop_update_code', trim($this->updateCode));
+
+        $this->toast('پکیج با اشتراک رایگان فعال شد.');
+        $this->redirect(route('payment.result', $purchase), navigate: true);
+    }
+
+    /** اولین اشتراک فعالِ طرح‌محور مشتری (با plan.packages eager) */
+    protected function findActivePlanSubscription(Customer $customer): ?Subscription
+    {
+        return $customer->subscriptions()
+            ->whereNotNull('subscription_plan_id')
+            ->where('status', 'active')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->with('plan.packages')
+            ->orderByDesc('id')
+            ->first();
     }
 
     public function render()

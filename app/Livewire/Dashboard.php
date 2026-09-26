@@ -118,6 +118,54 @@ class Dashboard extends Component
     }
 
     /* ------------------------------------------------------------------ */
+    /*  Subscription plans                                                 */
+    /* ------------------------------------------------------------------ */
+
+    /** خلاصه آمار طرح‌های اشتراک (سفارش‌ها، درآمد، اشتراک‌های فعال) */
+    #[Computed]
+    public function planStats(): array
+    {
+        $pendingApprovals = SubscriptionOrder::where('admin_status', SubscriptionOrder::ADMIN_STATUS_PENDING)
+            ->where('status', SubscriptionOrder::STATUS_PAID)
+            ->count();
+
+        return [
+            'active_plans' => SubscriptionPlan::where('is_active', true)->count(),
+            'total_orders' => SubscriptionOrder::count(),
+            'approved_orders' => SubscriptionOrder::where('admin_status', SubscriptionOrder::ADMIN_STATUS_APPROVED)->count(),
+            'pending_orders' => $pendingApprovals,
+            'rejected_orders' => SubscriptionOrder::where('admin_status', SubscriptionOrder::ADMIN_STATUS_REJECTED)->count(),
+            'plan_revenue' => (int) SubscriptionOrder::where('status', SubscriptionOrder::STATUS_PAID)->sum('final_amount'),
+            'active_plan_subscriptions' => Subscription::whereNotNull('subscription_plan_id')
+                ->where('status', 'active')
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->count(),
+            'pending_approvals' => $pendingApprovals,
+        ];
+    }
+
+    /** ۵ طرح برتر بر اساس تعداد سفارش */
+    #[Computed]
+    public function topPlans()
+    {
+        return SubscriptionPlan::query()
+            ->withCount('orders')
+            ->withSum(['orders as revenue' => fn ($q) => $q->where('status', SubscriptionOrder::STATUS_PAID)], 'final_amount')
+            ->withCount('packages')
+            ->addSelect([
+                'active_subs_count' => Subscription::selectRaw('count(*)')
+                    ->whereColumn('subscription_plan_id', 'subscription_plans.id')
+                    ->where('status', 'active')
+                    ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now())),
+            ])
+            ->orderByDesc('orders_count')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->limit(5)
+            ->get();
+    }
+
+    /* ------------------------------------------------------------------ */
     /*  Charts                                                             */
     /* ------------------------------------------------------------------ */
 

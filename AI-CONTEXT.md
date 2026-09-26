@@ -81,13 +81,27 @@ GET  /api/v1/check-update?...                          → UpdateController@chec
 GET  /api/v1/download-update/{id}                      → UpdateController@download
 GET  /api/v1/packages                                  → ApiPackageController@index    (پکیج‌های پروژه‌های مشتری)
                                                         ⭐ هر آیتم: is_purchased + purchased_license {license_key, expires_at, days_remaining, is_unlimited} (+ installed_license قدیمی)
-GET  /api/v1/packages/{slug}                           → show (+ is_purchased + purchased_license + installed_license)
-POST /api/v1/packages/{slug}/purchase                  → purchase  body: {callback_url, pricing_plan_id} → {payment_url, transaction_id, amount, gateway}
+                                                        ⭐⭐ هر آیتم (1405/07): subscription → null یا بلوک «رایگان با اشتراک فعال»:
+                                                           {is_free_with_subscription, plan_name, plan_slug, subscription_expires_at,
+                                                            days_remaining, free_months, license_key (اگر لایسنس فعال دارد)}
+                                                        ⭐⭐ کنار meta: subscription_summary {has_active_subscription, plan_name, expires_at, days_remaining}
+GET  /api/v1/packages/{slug}                           → show (+ is_purchased + purchased_license + installed_license + subscription)
+POST /api/v1/packages/{slug}/purchase                  → purchase  body: {callback_url?, pricing_plan_id?, gateway?} → {payment_url, transaction_id, amount, gateway}
      (اگر رایگان: مستقیم {is_free, license_key, expires_at, download_token})
+     ⭐⭐ (1405/07) اگر پکیج با اشتراک فعالِ طرح‌محور مشتری پوشش داده شود → بدون درگاه و بدون pricing_plan_id/callback_url:
+        {is_free: true, via_subscription: true, plan, license_key, expires_at, days_remaining, download_token, message} — idempotent (لایسنس فعال موجود → همان برمی‌گردد)
+     ⚠️ اگر پوشش نبود: pricing_plan_id الزامی (بدون آن → 422 «انتخاب طرح قیمت‌گذاری الزامی است.») و برای مسیر پولی callback_url الزامی (بدون آن → 422 «آدرس بازگشت (callback_url) برای پرداخت الزامی است.»)
 POST /api/v1/payments/{transactionId}/verify           → verifyPayment → {paid, license_key, expires_at, days_remaining, download_token, signature, version}
 GET|POST /api/v1/payments/callback                     → ApiPaymentCallbackController (بازگشت مرورگر؛ بدون callback_url → ریدایرکت به payment.result)
 POST /api/v1/packages/{slug}/verify-license            → {valid, expires_at, days_remaining, version, signature, download_token}
 GET  /api/v1/packages/{slug}/check-update?current_version= → {has_update, latest_version, changelog, ...}
+
+--- طرح‌های اشتراک (1405/07) ---
+GET  /api/v1/subscription-plans                        → ApiSubscriptionController@index (لیست طرح‌های فعال + پکیج‌های همراه)
+POST /api/v1/subscription-plans/{slug}/purchase        → ثبت سفارش (callback_url + gateway?) — رایگان: {is_free, order_id, admin_status}
+POST /api/v1/subscriptions/payments/{transactionId}/verify → تأیید پرداخت سفارش اشتراک
+GET  /api/v1/my-subscriptions                          → {subscriptions, orders, ⭐free_packages: پکیج‌های رایگانِ طرح‌های فعال
+                                                        + لایسنس فعال هر کدام {slug, name, free_months, free_label, subscription_plan, license_key, expires_at}}
 
 --- دانلود پکیج خریداری‌شده (جدید ۱۴۰۵/۰۶/۳۱) ---
 GET  /api/v1/packages/{slug}/download[?version=x.y.z]  → ⭐ دانلود مستقیم ZIP آخرین نسخه (یا نسخه خاص) با هدرهای احراز — برای proxy از سمت پروژه خریدار
@@ -107,6 +121,13 @@ GET  /api/v1/packages/download/{dlToken}               → فایل ZIP؛ ⭐ ح
    - `gateway` اختیاری — درگاه فعال پنل (پیش‌فرض zarinpal)؛ برای تست کل جریان بدون پول واقعی: `local`.
    - پاسخ: `{payment_url, transaction_id, amount, gateway, purchase_id}` — **payment_url را فقط ریدایرکت کنید**: برای درایورهای URL (زرین‌پال) مستقیمِ بانک است؛ برای درایورهای فرم‌محور (به‌پرداخت و…) مسیر امضادار `payment/form/{id}` روی پنل است که فرم خود-ارسال را رندر می‌کند (نیازی به منطق اضافه سمت کلاینت نیست).
    - رایگان (is_free یا final_price≤0): `{is_free: true, license_key, expires_at, download_token}` — بدون درگاه.
+   - ⭐⭐ **پکیج رایگانِ طرح اشتراک (1405/07):** اگر مشتری اشتراک فعالِ طرح‌محور دارد و پکیج در پکیج‌های همراهِ آن طرح است، همان `POST /packages/{slug}/purchase` را **بدون body** (بدون callback_url/pricing_plan_id/gateway) صدا بزنید:
+     ```json
+     {"is_free": true, "via_subscription": true, "plan": "اشتراک پایه", "license_key": "LIC-...",
+      "expires_at": "2026-10-21 20:45:31", "days_remaining": 25, "download_token": "tok...",
+      "message": "این پکیج با اشتراک فعال شما رایگان است."}
+     ```
+     idempotent است (لایسنس فعال موجود → همان کلید برمی‌گردد)؛ دانلود مثل بقیه مسیرها با download_token انجام می‌شود. برای تشخیص از قبل: در لیست/جزئیات پکیج، آیتم دارای `subscription.is_free_with_subscription=true` است؛ یا `GET /my-subscriptions → free_packages[].license_key` را بخوانید — اگر پر بود «نصب» است، اگر null بود با purchase همان‌جا رایگان نصبش کنید.
    - در بازگشت درگاه (GET/POST به callback_url شما با `transactionId`/`transaction_id`/`Authority`): سمت سرور `POST /api/v1/payments/{trx}/verify` را با هدرهای احراز صدا بزنید → `{paid, license_key, expires_at, days_remaining, download_token, signature, version}` → ذخیره در `installed_modules` (slug + license_key + license_expires_at + last_verified_at — همان چیزی که LicenseGuard مشتری می‌خواند). اگر لایسنس منقضی شده → همان خرید = تمدید.
    - ⚠️ برای درایور آزمایشی `local`: در فراخوانی verify پارامتر `?transactionId={trx}` را هم در query بفرستید (درایور local آن را از request می‌خواند؛ برای درگاه‌های واقعی بی‌اثر).
 5. **کیت آماده**: پوشه `download/shop-payment-kit/` (۵ part + README-FA) برای پروژه فروشگاه مشتری + مرجع زنده `mini-services/shop-sim` (port 3001).

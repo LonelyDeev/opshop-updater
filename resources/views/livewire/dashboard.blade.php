@@ -152,6 +152,125 @@
         </x-card>
     </div>
 
+    {{-- subscription plans --}}
+    <div class="space-y-4">
+        {{-- section header --}}
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="flex items-center gap-2.5 text-base font-black text-zinc-900 dark:text-zinc-50">
+                <span class="flex size-9 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                    <x-icon name="crown" class="size-4.5" />
+                </span>
+                طرح‌های اشتراک
+            </h3>
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="{{ route('admin.plans.index') }}" wire:navigate
+                   class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:bg-brand-50 hover:text-brand-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-brand-500/10 dark:hover:text-brand-400">
+                    <x-icon name="crown" class="size-3.5" />
+                    مدیریت طرح‌ها
+                </a>
+                <a href="{{ route('admin.subscriptions.orders') }}" wire:navigate
+                   class="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-amber-500/10 dark:hover:text-amber-400">
+                    <x-icon name="badge-check" class="size-3.5" />
+                    درخواست‌ها
+                    @if($this->planStats['pending_orders'] > 0)
+                        <span class="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-amber-600 dark:text-amber-400">{{ fa_num($this->planStats['pending_orders']) }}</span>
+                    @endif
+                </a>
+            </div>
+        </div>
+
+        {{-- plan mini stats --}}
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <x-stat label="سفارش‌های تأییدشده" :value="fa_num($this->planStats['approved_orders'])" icon="check-circle" variant="success"
+                    :hint="fa_num($this->planStats['total_orders']) . ' سفارش ثبت‌شده'" href="{{ route('admin.subscriptions.orders') }}" />
+            <x-stat label="در انتظار تأیید" :value="fa_num($this->planStats['pending_orders'])" icon="hourglass" variant="warning"
+                    :hint="fa_num($this->planStats['rejected_orders']) . ' سفارش ردشده'" href="{{ route('admin.subscriptions.orders') }}" />
+            <x-stat label="درآمد طرح‌ها" :value="fa_num(money($this->planStats['plan_revenue'], false))" icon="wallet" variant="primary"
+                    hint="تومان · سفارش‌های پرداخت‌شده" />
+            <x-stat label="اشتراک فعال طرح‌ها" :value="fa_num($this->planStats['active_plan_subscriptions'])" icon="ticket" variant="neutral"
+                    :hint="fa_num($this->planStats['active_plans']) . ' طرح فعال'" href="{{ route('admin.plans.index') }}" />
+        </div>
+
+        {{-- top plans table --}}
+        <div class="card overflow-hidden">
+            @if(count($this->topPlans))
+                <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+                    <p class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                        <span class="font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ fa_num(count($this->topPlans)) }}</span>
+                        طرح برتر بر اساس تعداد سفارش
+                    </p>
+                    <x-icon name="crown" class="size-4 text-zinc-300 dark:text-zinc-600" />
+                </div>
+                <div class="table-wrap ring-0">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>طرح</th>
+                                <th class="hidden sm:table-cell">مدت</th>
+                                <th>سفارش‌ها</th>
+                                <th>درآمد</th>
+                                <th class="hidden md:table-cell">پکیج‌ها</th>
+                                <th class="hidden lg:table-cell">اشتراک فعال</th>
+                                <th>وضعیت</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($this->topPlans as $plan)
+                                <tr wire:key="dash-plan-{{ $plan->id }}">
+                                    <td>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{{ $plan->name }}</p>
+                                            @if($plan->is_free)
+                                                <x-badge variant="info" icon="gift">رایگان</x-badge>
+                                            @endif
+                                            @if($plan->is_one_time)
+                                                <x-badge variant="warning" icon="ticket">یک‌بارمصرف</x-badge>
+                                            @endif
+                                        </div>
+                                        <p class="mt-0.5 hidden text-xs text-zinc-400 sm:block" dir="ltr">{{ $plan->slug }}</p>
+                                    </td>
+                                    <td class="hidden text-sm text-zinc-600 dark:text-zinc-300 sm:table-cell">{{ $plan->duration_label }}</td>
+                                    <td>
+                                        @if($plan->orders_count)
+                                            <span class="text-sm font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ fa_num($plan->orders_count) }}</span>
+                                            <span class="text-xs text-zinc-400">سفارش</span>
+                                        @else
+                                            <span class="text-sm text-zinc-400">—</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if($plan->revenue)
+                                            <span class="text-sm font-bold tabular-nums text-brand-600 dark:text-brand-400">{{ fa_num(money($plan->revenue, false)) }}</span>
+                                            <span class="text-[10px] text-zinc-400">تومان</span>
+                                        @else
+                                            <span class="text-sm text-zinc-400">—</span>
+                                        @endif
+                                    </td>
+                                    <td class="hidden md:table-cell">
+                                        <span class="text-sm font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{{ fa_num($plan->packages_count) }}</span>
+                                        <span class="text-xs text-zinc-400">پکیج</span>
+                                    </td>
+                                    <td class="hidden tabular-nums lg:table-cell {{ $plan->active_subs_count ? 'text-sm font-bold text-zinc-700 dark:text-zinc-200' : 'text-sm text-zinc-400' }}">
+                                        {{ $plan->active_subs_count ? fa_num($plan->active_subs_count) : '—' }}
+                                    </td>
+                                    <td>
+                                        @if($plan->is_active)
+                                            <x-badge variant="success" icon="check-circle">فعال</x-badge>
+                                        @else
+                                            <x-badge variant="danger" icon="x-circle">غیرفعال</x-badge>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <x-empty icon="crown" title="طرحی ثبت نشده" description="پس از تعریف طرح‌های اشتراک، آمار فروش آن‌ها اینجا نمایش داده می‌شود." />
+            @endif
+        </div>
+    </div>
+
     {{-- recent customers + recent updates --}}
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <x-card title="آخرین مشتریان ثبت‌شده">

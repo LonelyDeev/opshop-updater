@@ -8,6 +8,8 @@ use App\Models\Package;
 use App\Models\PackagePurchase;
 use App\Models\Project;
 use App\Models\Subscription;
+use App\Models\SubscriptionOrder;
+use App\Models\SubscriptionPlan;
 use App\Models\Update;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -86,6 +88,8 @@ class Index extends Component
         $subscriptionsRevenue = (int) Subscription::where('payment_status', 'paid')->sum('final_amount');
         $packageRevenue = (int) PackagePurchase::where('status', PackagePurchase::STATUS_PAID)->sum('amount');
 
+        $planStats = $this->plansStats;
+
         return [
             [
                 'label' => 'کل مشتریان',
@@ -126,6 +130,22 @@ class Index extends Component
                 'variant' => 'neutral',
                 'hint' => PackagePurchase::where('status', PackagePurchase::STATUS_PENDING)->count() . ' در انتظار پرداخت',
                 'href' => route('admin.purchases.index'),
+            ],
+            [
+                'label' => 'سفارش‌های اشتراک',
+                'value' => $planStats['total_orders'],
+                'icon' => 'crown',
+                'variant' => 'warning',
+                'hint' => fa_num($planStats['pending_orders']) . ' در انتظار تأیید',
+                'href' => route('admin.subscriptions.orders'),
+            ],
+            [
+                'label' => 'درآمد طرح‌ها',
+                'value' => money($planStats['plan_revenue'], false),
+                'icon' => 'wallet',
+                'variant' => 'primary',
+                'hint' => 'سفارش‌های پرداخت‌شده طرح‌ها',
+                'href' => route('admin.plans.index'),
             ],
             [
                 'label' => 'درآمد کل',
@@ -202,6 +222,8 @@ class Index extends Component
         $subscriptionsRevenue = (int) Subscription::where('payment_status', 'paid')->sum('final_amount');
         $packageRevenue = (int) PackagePurchase::where('status', PackagePurchase::STATUS_PAID)->sum('amount');
 
+        $planStats = $this->plansStats;
+
         return [
             [
                 'icon' => 'users',
@@ -240,6 +262,17 @@ class Index extends Component
                     ['label' => 'پرداخت‌شده', 'value' => fa_num($paidPurchases)],
                     ['label' => 'در انتظار پرداخت', 'value' => fa_num($pendingPurchases)],
                     ['label' => 'ناموفق', 'value' => fa_num($failedPurchases)],
+                ],
+            ],
+            [
+                'icon' => 'crown',
+                'title' => 'طرح‌های اشتراک',
+                'rows' => [
+                    ['label' => 'طرح فعال', 'value' => fa_num($planStats['active_plans']) . ' از ' . fa_num(SubscriptionPlan::count()) . ' طرح'],
+                    ['label' => 'سفارش تأییدشده', 'value' => fa_num($planStats['approved_orders'])],
+                    ['label' => 'در انتظار تأیید', 'value' => fa_num($planStats['pending_orders'])],
+                    ['label' => 'ردشده', 'value' => fa_num($planStats['rejected_orders'])],
+                    ['label' => 'درآمد طرح‌ها', 'value' => money($planStats['plan_revenue'])],
                 ],
             ],
             [
@@ -348,6 +381,58 @@ class Index extends Component
             ->orderByDesc('paid_purchases_count')
             ->orderByDesc('purchases_count')
             ->limit(5)
+            ->get();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  تب «طرح‌های اشتراک»                                                */
+    /* ------------------------------------------------------------------ */
+
+    /** خلاصه آمار طرح‌های اشتراک (همان planStats داشبورد) */
+    #[Computed]
+    public function plansStats(): array
+    {
+        $pendingApprovals = SubscriptionOrder::where('admin_status', SubscriptionOrder::ADMIN_STATUS_PENDING)
+            ->where('status', SubscriptionOrder::STATUS_PAID)
+            ->count();
+
+        return [
+            'active_plans' => SubscriptionPlan::where('is_active', true)->count(),
+            'total_orders' => SubscriptionOrder::count(),
+            'approved_orders' => SubscriptionOrder::where('admin_status', SubscriptionOrder::ADMIN_STATUS_APPROVED)->count(),
+            'pending_orders' => $pendingApprovals,
+            'rejected_orders' => SubscriptionOrder::where('admin_status', SubscriptionOrder::ADMIN_STATUS_REJECTED)->count(),
+            'plan_revenue' => (int) SubscriptionOrder::where('status', SubscriptionOrder::STATUS_PAID)->sum('final_amount'),
+            'active_plan_subscriptions' => Subscription::whereNotNull('subscription_plan_id')
+                ->where('status', 'active')
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->count(),
+            'pending_approvals' => $pendingApprovals,
+        ];
+    }
+
+    /** گزارش کامل همه طرح‌ها، مرتب بر اساس درآمد */
+    #[Computed]
+    public function plansReport()
+    {
+        return SubscriptionPlan::query()
+            ->with('packages:id,name')
+            ->withCount('orders')
+            ->withCount(['orders as approved_orders_count' => fn ($q) => $q->where('admin_status', SubscriptionOrder::ADMIN_STATUS_APPROVED)])
+            ->withCount(['orders as pending_orders_count' => fn ($q) => $q->where('admin_status', SubscriptionOrder::ADMIN_STATUS_PENDING)
+                ->where('status', SubscriptionOrder::STATUS_PAID)])
+            ->withCount(['orders as rejected_orders_count' => fn ($q) => $q->where('admin_status', SubscriptionOrder::ADMIN_STATUS_REJECTED)])
+            ->withSum(['orders as revenue' => fn ($q) => $q->where('status', SubscriptionOrder::STATUS_PAID)], 'final_amount')
+            ->withCount('packages')
+            ->addSelect([
+                'active_subs_count' => Subscription::selectRaw('count(*)')
+                    ->whereColumn('subscription_plan_id', 'subscription_plans.id')
+                    ->where('status', 'active')
+                    ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now())),
+            ])
+            ->orderByDesc('revenue')
+            ->orderByDesc('orders_count')
+            ->orderBy('sort_order')
             ->get();
     }
 

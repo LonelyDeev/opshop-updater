@@ -66,11 +66,14 @@
 
     {{-- ============ Sidebar ============ --}}
     <aside
+        {{-- FIX (منوی موبایل وسط صفحه): در RTL سایدبار به لبه راست (start) چسبیده است؛
+             translate-x فیزیکی است، پس حالت مخفی باید +100% (بیرون از لبه راست) باشد نه -100%
+             که منو را وسط صفحه می‌آورد. transition باید شامل translate باشد (نه فقط transform). --}}
         :class="[
             collapsed ? 'lg:w-[76px]' : 'lg:w-64',
-            mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+            mobileOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0',
         ]"
-        class="fixed inset-y-0 start-0 z-40 flex w-64 shrink-0 flex-col border-e border-white/5 bg-zinc-950 text-zinc-400 transition-[width,transform] duration-200
+        class="fixed inset-y-0 start-0 z-40 flex w-64 shrink-0 flex-col border-e border-white/5 bg-zinc-950 text-zinc-400 transition-[width,translate,transform] duration-200
                lg:sticky lg:top-0 lg:h-screen"
     >
         {{-- brand --}}

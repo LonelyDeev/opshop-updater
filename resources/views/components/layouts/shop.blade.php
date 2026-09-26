@@ -96,8 +96,11 @@
 
             <div class="flex-1"></div>
 
+            {{-- FIX (دکمه تم صفحه اصلی کار نمی‌کرد): @click فقط داخل یک کامپوننت Alpine
+                 (x-data) پردازش می‌شود؛ body فروشگاه x-data ندارد → دکمه مرده بود.
+                 x-data روی هدر این مشکل را رفع می‌کند. --}}
             {{-- dark mode --}}
-            <button type="button" @click="window.toggleDarkMode()"
+            <button type="button" x-data @click="window.toggleDarkMode()"
                     class="rounded-xl p-2 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-amber-300"
                     aria-label="تغییر پوسته روشن/تاریک">
                 <x-icon name="moon" class="hidden size-5 dark:block" />

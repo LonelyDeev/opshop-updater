@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Gateway;
+use App\Models\PackageLicense;
 use App\Models\SubscriptionOrder;
 use App\Models\SubscriptionPlan;
 use App\Services\PackageApiAuthService;
@@ -20,6 +21,7 @@ use RuntimeException;
  * POST /api/v1/subscription-plans/{slug}/purchase        → ثبت سفارش (callback_url + gateway?)
  * POST /api/v1/subscriptions/payments/{transactionId}/verify → تأیید پرداخت سفارش اشتراک
  * GET  /api/v1/my-subscriptions                          → اشتراک‌های فعال + سفارش‌های مشتری
+ *                                                        ⭐ + free_packages: پکیج‌های رایگانِ طرح‌های فعال (+ لایسنس فعال هر کدام)
  *
  * احراز هویت: همان قرارداد پکیج‌ها (Authorization: Bearer {update_code} + X-Project-Url).
  */
@@ -185,6 +187,8 @@ class ApiSubscriptionController extends Controller
     /* ===================================================================
      *  GET /api/v1/my-subscriptions
      *  اشتراک‌های طرح‌محورِ این مشتری + سفارش‌های اخیر
+     *  ⭐ + free_packages: پکیج‌هایی که با اشتراک فعالِ طرح‌محور رایگان‌اند
+     *    (لایسنس فعال هر پکیج هم اگر صادر شده باشد برمی‌گردد)
      * =================================================================== */
     public function mySubscriptions(Request $request): JsonResponse
     {
@@ -228,8 +232,9 @@ class ApiSubscriptionController extends Controller
 
             return response()->json([
                 'data' => [
-                    'subscriptions' => $subscriptions,
-                    'orders'        => $orders,
+                    'subscriptions'  => $subscriptions,
+                    'orders'         => $orders,
+                    'free_packages'  => $this->freePackagesFor($customer),
                 ],
             ]);
         } catch (RuntimeException $e) {
@@ -240,6 +245,63 @@ class ApiSubscriptionController extends Controller
     /* ---------------------------------------------------------------- */
     /*  Helpers                                                          */
     /* ---------------------------------------------------------------- */
+
+    /**
+     * پکیج‌های رایگانِ طرح‌های اشتراکِ فعال مشتری.
+     * لایسنس‌های فعال مشتری یک‌بار کوئری می‌شوند و بر اساس package_id نگاشت می‌گردند.
+     */
+    private function freePackagesFor(Customer $customer): array
+    {
+        $activeSubs = $customer->subscriptions()
+            ->whereNotNull('subscription_plan_id')
+            ->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->with('plan.packages')
+            ->get();
+
+        if ($activeSubs->isEmpty()) {
+            return [];
+        }
+
+        // لایسنس‌های فعال مشتری — یک کوئری (کلید = package_id)
+        $licenses = PackageLicense::query()
+            ->where('customer_id', $customer->id)
+            ->where('status', PackageLicense::STATUS_ACTIVE)
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->get()
+            ->keyBy('package_id');
+
+        $freePackages = [];
+        $seen = [];
+        foreach ($activeSubs as $sub) {
+            foreach ($sub->plan?->packages ?? [] as $pkg) {
+                if (in_array($pkg->id, $seen)) {
+                    continue; // هر پکیج یک‌بار (اولین اشتراک فعال ملاک است)
+                }
+                $seen[] = $pkg->id;
+
+                $license    = $licenses->get($pkg->id);
+                $freeMonths = (int) ($pkg->pivot->free_months ?? 1);
+
+                $freePackages[] = [
+                    'slug'              => $pkg->slug,
+                    'name'              => $pkg->name,
+                    'free_months'       => $freeMonths,
+                    'free_label'        => SubscriptionPlan::freeMonthsLabel($freeMonths),
+                    'subscription_plan' => $sub->plan?->name,
+                    // لایسنس صادرشده (اگر مشتری لایسنس فعال این پکیج را دارد)
+                    'license_key'       => $license?->license_key,
+                    'expires_at'        => $license?->expires_at?->toDateTimeString(),
+                ];
+            }
+        }
+
+        return $freePackages;
+    }
 
     private function presentPlan(SubscriptionPlan $plan): array
     {

@@ -262,15 +262,52 @@ class SubscriptionService
      * =================================================================== */
 
     /**
-     * صدور یا تمدید لایسنس رایگان یک پکیج برای مشتری:
-     *  - اگر لایسنس فعال/منقضی (غیر باطل‌شده) دارد → تمدید: از انقضای فعلی + free_months
-     *  - در غیر این صورت → لایسنس جدید از الان + free_months
+     * اشتراک فعالِ طرح‌محوری که این پکیج را رایگان می‌کند (یا null).
+     *
+     * منطق: اشتراک‌های طرح‌محورِ (subscription_plan_id پر) فعالِ مشتری — بدون انقضا
+     * یا با انقضای آینده — که پکیج موردنظر در فهرست پکیج‌های همراهِ طرحشان باشد.
+     * (مشخصه pivot «free_months» مدت دسترسی رایگان است؛ ۰ = نامحدود)
+     */
+    public function activeSubscriptionCovering(Customer $customer, Package $package): ?Subscription
+    {
+        return $customer->subscriptions()
+            ->whereNotNull('subscription_plan_id')
+            ->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->whereHas('plan.packages', fn ($q) => $q->where('packages.id', $package->id))
+            ->with('plan.packages')
+            ->first();
+    }
+
+    /**
+     * صدور یا تمدید لایسنس رایگان یک پکیج برای مشتری (با سفارش اشتراک).
      *
      * @param  int $freeMonths مدت دسترسی رایگان (۰ = نامحدود)
      */
     public function grantPackageAccess(Customer $customer, Package $package, int $freeMonths, SubscriptionOrder $order): PackageLicense
     {
-        return DB::transaction(function () use ($customer, $package, $freeMonths, $order) {
+        return $this->grantFreeAccess(
+            $customer,
+            $package,
+            $freeMonths,
+            'دسترسی رایگان از طریق اشتراک «' . $order->plan_name . '».'
+        );
+    }
+
+    /**
+     * هسته صدور/تمدید لایسنس رایگان — بدون نیاز به سفارش اشتراک
+     * (برای مسیر API: وقتی اشتراک فعال هست ولی سفارشی به آن متصل نیست).
+     *  - اگر لایسنس فعال/منقضی (غیر باطل‌شده) دارد → تمدید: از انقضای فعلی + free_months
+     *  - در غیر این صورت → لایسنس جدید از الان + free_months
+     *
+     * @param  int         $freeMonths مدت دسترسی رایگان (۰ = نامحدود)
+     * @param  string|null $note       یادداشت لایسنس (منبع دسترسی رایگان)
+     */
+    public function grantFreeAccess(Customer $customer, Package $package, int $freeMonths, ?string $note = null): PackageLicense
+    {
+        return DB::transaction(function () use ($customer, $package, $freeMonths, $note) {
             $existing = PackageLicense::query()
                 ->where('package_id', $package->id)
                 ->where('customer_id', $customer->id)
@@ -293,7 +330,7 @@ class SubscriptionService
                 'starts_at'       => $startsAt,
                 'expires_at'      => $expiresAt,
                 'duration_months' => $freeMonths,
-                'notes'           => 'دسترسی رایگان از طریق اشتراک «' . $order->plan_name . '».',
+                'notes'           => $note ?: 'دسترسی رایگان از طریق اشتراک.',
             ]);
 
             if ($existing) {

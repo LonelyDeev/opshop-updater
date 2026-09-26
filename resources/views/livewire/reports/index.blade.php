@@ -13,6 +13,7 @@
         ['id' => 'customers', 'label' => 'مشتریان', 'icon' => 'users'],
         ['id' => 'updates', 'label' => 'آپدیت‌ها', 'icon' => 'git-branch'],
         ['id' => 'sales', 'label' => 'فروش', 'icon' => 'wallet'],
+        ['id' => 'plans', 'label' => 'طرح‌های اشتراک', 'icon' => 'crown'],
     ])
     <x-tabs :tabs="$tabs">
         <x-slot:overview>
@@ -368,5 +369,128 @@
                 </x-card>
             </div>
         </x-slot:sales>
+        <x-slot:plans>
+            <div class="space-y-6">
+                {{-- summary pills --}}
+                <div class="card flex flex-wrap items-center gap-2 p-4">
+                    <span class="me-1 flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                        <x-icon name="crown" class="size-3.5" />
+                        وضعیت طرح‌ها:
+                    </span>
+                    <x-badge variant="success" icon="check-circle">طرح فعال {{ fa_num($this->plansStats['active_plans']) }}</x-badge>
+                    <x-badge variant="warning" icon="hourglass">در انتظار تأیید {{ fa_num($this->plansStats['pending_orders']) }}</x-badge>
+                    <x-badge variant="danger" icon="x-circle">ردشده {{ fa_num($this->plansStats['rejected_orders']) }}</x-badge>
+                    <x-badge variant="primary" icon="wallet">درآمد {{ fa_num(money($this->plansStats['plan_revenue'], false)) }} تومان</x-badge>
+                    <x-badge variant="neutral" icon="ticket">اشتراک فعال {{ fa_num($this->plansStats['active_plan_subscriptions']) }}</x-badge>
+                </div>
+
+                {{-- plans table --}}
+                <div class="card overflow-hidden">
+                    @if($this->plansReport->count())
+                        <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+                            <p class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                                <span class="font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ fa_num($this->plansReport->count()) }}</span>
+                                طرح اشتراک — مرتب بر اساس درآمد
+                            </p>
+                            <x-icon name="crown" class="size-4 text-zinc-300 dark:text-zinc-600" />
+                        </div>
+                        <div class="table-wrap ring-0">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>طرح</th>
+                                        <th class="hidden sm:table-cell">مدت</th>
+                                        <th>قیمت</th>
+                                        <th>سفارش‌ها</th>
+                                        <th>درآمد</th>
+                                        <th class="hidden md:table-cell">اشتراک فعال</th>
+                                        <th class="hidden lg:table-cell">پکیج‌ها</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($this->plansReport as $plan)
+                                        <tr wire:key="report-plan-{{ $plan->id }}">
+                                            <td>
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{{ $plan->name }}</p>
+                                                    @if($plan->is_free)
+                                                        <x-badge variant="info" icon="gift">رایگان</x-badge>
+                                                    @endif
+                                                    @if($plan->is_one_time)
+                                                        <x-badge variant="warning" icon="ticket">یک‌بارمصرف</x-badge>
+                                                    @endif
+                                                    @if(!$plan->is_active)
+                                                        <x-badge variant="danger" icon="x-circle">غیرفعال</x-badge>
+                                                    @endif
+                                                </div>
+                                                <p class="mt-0.5 hidden text-xs text-zinc-400 sm:block" dir="ltr">{{ $plan->slug }}</p>
+                                            </td>
+                                            <td class="hidden text-sm text-zinc-600 dark:text-zinc-300 sm:table-cell">{{ $plan->duration_label }}</td>
+                                            <td class="text-sm">
+                                                @if($plan->is_free)
+                                                    <x-badge variant="info">رایگان</x-badge>
+                                                @else
+                                                    <span class="font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{{ fa_num(money($plan->final_price, false)) }}</span>
+                                                    <span class="text-[10px] text-zinc-400">تومان</span>
+                                                    @if($plan->discount_price)
+                                                        <p class="text-[11px] tabular-nums text-zinc-400 line-through">{{ fa_num(money($plan->price, false)) }}</p>
+                                                    @endif
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if($plan->orders_count)
+                                                    <span class="text-sm font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ fa_num($plan->orders_count) }}</span>
+                                                    <div class="mt-1 flex flex-wrap items-center gap-1">
+                                                        @if($plan->approved_orders_count)
+                                                            <x-badge variant="success">تأیید {{ fa_num($plan->approved_orders_count) }}</x-badge>
+                                                        @endif
+                                                        @if($plan->pending_orders_count)
+                                                            <x-badge variant="warning">در انتظار {{ fa_num($plan->pending_orders_count) }}</x-badge>
+                                                        @endif
+                                                        @if($plan->rejected_orders_count)
+                                                            <x-badge variant="danger">رد {{ fa_num($plan->rejected_orders_count) }}</x-badge>
+                                                        @endif
+                                                    </div>
+                                                @else
+                                                    <span class="text-sm text-zinc-400">—</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if($plan->revenue)
+                                                    <span class="text-sm font-bold tabular-nums text-brand-600 dark:text-brand-400">{{ fa_num(money($plan->revenue, false)) }}</span>
+                                                    <span class="text-[10px] text-zinc-400">تومان</span>
+                                                @else
+                                                    <span class="text-sm text-zinc-400">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="hidden tabular-nums md:table-cell {{ $plan->active_subs_count ? 'text-sm font-bold text-zinc-700 dark:text-zinc-200' : 'text-sm text-zinc-400' }}">
+                                                {{ $plan->active_subs_count ? fa_num($plan->active_subs_count) : '—' }}
+                                            </td>
+                                            <td class="hidden lg:table-cell">
+                                                <p class="text-sm font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">
+                                                    {{ fa_num($plan->packages_count) }} <span class="text-xs font-normal text-zinc-400">پکیج</span>
+                                                </p>
+                                                @if($plan->packages->isNotEmpty())
+                                                    <div class="mt-1 space-y-1">
+                                                        @foreach($plan->packages->take(3) as $pkg)
+                                                            <p class="max-w-48 truncate text-xs text-zinc-400 dark:text-zinc-500">— {{ $pkg->name }}</p>
+                                                        @endforeach
+                                                        @if($plan->packages->count() > 3)
+                                                            <p class="text-[11px] text-zinc-400">+ {{ fa_num($plan->packages->count() - 3) }} پکیج دیگر</p>
+                                                        @endif
+                                                    </div>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <x-empty icon="crown" title="طرحی ثبت نشده" description="پس از تعریف طرح‌های اشتراک در پنل، گزارش فروش آن‌ها اینجا نمایش داده می‌شود." />
+                    @endif
+                </div>
+            </div>
+        </x-slot:plans>
     </x-tabs>
 </div>

@@ -236,13 +236,12 @@
             </div>
 
             <div class="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200 dark:bg-zinc-800/40 dark:ring-zinc-700">
-                <x-toggle wire:model.live="form.is_free" label="این پکیج رایگان است" />
-                <div class="mt-4">
-                    @if(empty($this->form['is_free']))
-                        <x-field label="قیمت پیش‌فرض (تومان)">
-                            <x-input wire:model="form.default_price" type="number" min="0" placeholder="950000" icon="banknote" dir="ltr" :class="$errors->has('form.default_price') ? 'input-error' : ''" />
-                        </x-field>
-                    @endif
+                {{-- PERF: بدون .live — نمایش فیلد قیمت به Alpine ($wire) واگذار شد تا toggle بدون رفت‌وبرگشت سرور باشد؛ مقدار با ذخیره فرم ارسال می‌شود --}}
+                <x-toggle wire:model="form.is_free" label="این پکیج رایگان است" />
+                <div class="mt-4" x-show="! $wire.form.is_free" x-cloak>
+                    <x-field label="قیمت پیش‌فرض (تومان)">
+                        <x-input wire:model="form.default_price" type="number" min="0" placeholder="950000" icon="banknote" dir="ltr" :class="$errors->has('form.default_price') ? 'input-error' : ''" />
+                    </x-field>
                 </div>
             </div>
 
