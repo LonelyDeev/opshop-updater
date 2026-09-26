@@ -1,56 +1,62 @@
-# بسته رفع ۴ مشکل گزارش‌شده (آپلود تصویر / CKEditor منبع / آپلود ZIP / mt-8)
+# بسته به‌روزرسانی — اشتراک‌محور شدن API + فرانت فروشگاه + فیکس‌ها
 
-این بسته فقط فایل‌های تغییر‌یافته است. روی **ریشه پروژه‌تان** (همان‌جا که `artisan` و `app/` هستند) استخراج کنید تا جایگزین شوند. دیتابیس و `.env` شما دست‌نخورده می‌ماند.
+این بسته **overlay** روی نسخه فعلی پروژه `admin-panel` است.
+فایل‌ها را در ریشه پروژه خود کپی کنید (merge) و مراحل پایین را انجام دهید.
 
-## چه مشکلی رفع شد؟
+## چه چیزی اضافه/تغییر کرده؟
 
-### ۱) خطای آپلود تصویر شاخص/گالری — `Could not move the file "…livewire-tmp…" to "…public/uploads/…"`
-**علت:** فایل‌های آپلودی Livewire در درخواستِ *قبلی* آپلود می‌شوند؛ متد `move()` در پس‌زمینه از `move_uploaded_file()` استفاده می‌کند که فقط روی فایل‌های *همین درخواست* کار می‌کند → همیشه شکست می‌خورد (روی هر سیستم‌عاملی).
-**رفع:** `app/Services/ImageUploadService.php` — متد جدید `persistFile()`: انتقال با `rename()` معمولی + fallback کپی استریمی. پوشه مقصد هم در صورت نبود ساخته می‌شود.
+### ۱) API اشتراک‌محور — پکیج‌های رایگانِ طرح مشتری (نصب/دانلود)
+- `GET /api/v1/packages` → هر آیتم فیلد جدید `subscription`:
+  ```json
+  "subscription": {
+    "is_free_with_subscription": true,
+    "plan_name": "اشتراک پایه",
+    "plan_slug": "basic-monthly",
+    "subscription_expires_at": "2026-10-21 20:45:31",
+    "days_remaining": 25,
+    "free_months": 1,
+    "license_key": "LIC-..."
+  }
+  ```
+  + خلاصه سطح پاسخ: `"subscription_summary": {"has_active_subscription": true, "plan_name": "...", "expires_at": "...", "days_remaining": N}`
+- `POST /api/v1/packages/{slug}/purchase` — اگر پکیج در طرحِ اشتراک فعال مشتری باشد:
+  - **بدون نیاز به `pricing_plan_id` و `callback_url` و بدون درگاه** → پاسخ:
+    ```json
+    {"is_free": true, "via_subscription": true, "plan": "اشتراک پایه",
+     "license_key": "LIC-...", "expires_at": "...", "days_remaining": 25,
+     "download_token": "یک‌بارمصرف ۱۵دقیقه‌ای", "message": "این پکیج با اشتراک فعال شما رایگان است."}
+    ```
+  - idempotent است (لایسنس فعال موجود → همان برگردانده می‌شود).
+  - اگر لایسنس هنوز صادر نشده (مثلاً پکیج بعداً به طرح اضافه شده) → همان‌جا با مدت free_months طرح صادر/تمدید می‌شود.
+- `GET /api/v1/my-subscriptions` → کلید جدید `free_packages`: لیست پکیج‌های رایگان طرح‌های فعال با لایسنس و انقضا.
+- دانلود: توکن از پاسخ purchase مستقیم قابل استفاده است:
+  `GET /api/v1/packages/download/{token}` (بدون هدر) یا `POST /api/v1/packages/{slug}/download-url`.
 
-### ۲) CKEditor — کد HTML در حالت «منبع» ذخیره نمی‌شد و سمت کنترلر خالی می‌رسید
-**علت:** CKEditor 4 در حالت Source رویداد `change` نمی‌دهد؛ بنابراین textarea مخفی (wire:model) هرگز آپدیت نمی‌شد.
-**رفع:** `resources/js/ckeditor.js` — با رویداد `mode`، در حالت Source شنونده‌های `input/change/blur` مستقیماً روی textarea منبع (`.cke_source`) بسته می‌شوند و هر تایپی فوراً به Livewire سینک می‌شود. برگشت به WYSIWYG هم یک سینک اجباری دارد.
-**بهبود جانبی:** `allowedContent: true` — HTML خام (کلاس‌ها و data-attributes سفارشی) هنگام رفت‌وبرگشت منبع⇄گرافیکی دیگر حذف نمی‌شود.
+**سمت فروشگاه خودتان:** در لیست پکیج‌ها اگر `subscription.is_free_with_subscription == true` بود، به‌جای «خرید» دکمه «نصب/دانلود رایگان» بگذارید؛ با فراخوانی purchase همان مسیر بالا، بدون درگاه لایسنس + download_token می‌گیرید.
 
-### ۳) خطای `The versionFile failed to upload.` در آپلود فایل ZIP نسخه
-**علت:** سقف پیش‌فرض آپلود موقت Livewire فقط **۱۲ مگابایت** است.
-**رفع:** `config/livewire.php` — سقف به **۵۰۰MB** افزایش یافت.
-**⚠️ الزامی — محدودیت‌های PHP را هم بالا ببرید** وگرنه همین خطا باقی می‌ماند (آپلود Livewire یک‌تکه است):
-```ini
-upload_max_filesize = 512M
-post_max_size = 512M
-memory_limit = 512M
-max_execution_time = 300
-```
-- **لاراگون:** منوی Laragon → PHP → php.ini (یا فایل `C:\laragon\bin\php\...\php.ini`) → مقادیر بالا → ذخیره → ری‌استارت Apache/Nginx.
-- **سی‌پنل:** MultiPHP INI Editor → همان چهار مقدار.
+### ۲) فرانت فروشگاه
+- صفحه اصلی: جعبه «بررسی اشتراک» (ورود کد آپدیت) → بنر «اشتراک فعال دارید» + روی کارت پکیج‌های طرح، نشان «رایگان با اشتراک».
+- صفحه پکیج پوشش‌داده: جعبه اطلاع + دکمه «دریافت رایگان با اشتراک» (بدون درگاه؛ idempotent).
 
-### ۴) حذف `-mt-8` از سکشن آمار فروشگاه
-`resources/views/livewire/shop/home.blade.php` — کلاس منفی حذف شد (`mx-auto flex w-full max-w-7xl …`).
+### ۳) فیکس‌ها
+- **منوی موبایل پنل (وسط صفحه بودن):** در RTL، translate-x فیزیکی است؛ حالت مخفی سایدبار از `-translate-x-full` به `translate-x-full` اصلاح شد + transition شامل translate.
+- **دکمه تم تاریک/روشن صفحه اصلی فروشگاه:** دکمه @click داشت ولی خارج از هر کامپوننت Alpine بود (body فروشگاه x-data ندارد) → x-data روی دکمه اضافه شد.
+- **کندی پنل در فرم‌های CKEditor (پکیج‌ها):**
+  - toggle «این پکیج رایگان است» دیگر رفت‌وبرگشت سرور نمی‌زند (wire:model deferred + نمایش فیلد قیمت با x-show سمت Alpine — مقدار با ذخیره ارسال می‌شود).
+  - تایپ در CKEditor به‌جای getData() (پارس کل سند) روی هر کلید، صف ۲۵۰ms شد؛ blur/خروج از Source فوری سینک می‌شوند.
 
-## نحوه اعمال
+### ۴) داشبورد + گزارش‌ها
+- داشبورد: بخش جدید «طرح‌های اشتراک» (سفارش‌های تأییدشده/در انتظار/درآمد طرح‌ها/اشتراک فعال + جدول ۵ طرح برتر).
+- گزارش‌ها: کارت‌های «سفارش‌های اشتراک» و «درآمد طرح‌ها» در نمای کلی + ردیف طرح‌ها در خلاصه + تب جدید «طرح‌های اشتراک» با جدول کامل.
 
-**گزینه الف (سریع‌ترین):** محتویات پوشه `admin-panel/` این بسته را روی ریشه پروژه کپی/جایگزین کنید. چون `public/build/` (باندل ساخته‌شده) داخل بسته هست، **نیازی به اجرای build ندارید**. سپس:
+## نصب
 ```bash
-php artisan optimize:clear
-```
-و یک بار Ctrl+Shift+R (هارد‌ریفرش) در مرورگر.
-
-**گزینه ب (اگر خودتان بیلد می‌کنید):** فقط ۴ فایل سورس (`app/…`، `config/…`، `resources/js/ckeditor.js`، `resources/views/…`) را جایگزین کنید و:
-```bash
-npm run build     # یا bun run build
-php artisan optimize:clear
+# ۱) فایل‌ها را merge کنید (روی پروژه فعلی)
+# ۲) نیازی به migrate نیست (تغییر دیتابیسی نداریم)
+php artisan view:clear
+# باندل public/build آماده داخل بسته هست؛ اگر خودتان rebuild می‌خواهید:
+# bun install && bun run build
 ```
 
-## فهرست فایل‌ها
-```
-admin-panel/app/Services/ImageUploadService.php          ← رفع ۱
-admin-panel/resources/js/ckeditor.js                     ← رفع ۲ (بعد از بیلد لازم دارد، مگر گزینه الف)
-admin-panel/config/livewire.php                          ← رفع ۳ (+ راهنمای php.ini در کامنت)
-admin-panel/resources/views/livewire/shop/home.blade.php ← رفع ۴
-admin-panel/public/build/manifest.json                   ← باندل آماده (گزینه الف)
-admin-panel/public/build/assets/app-*.js                 ← باندل آماده
-admin-panel/public/build/assets/app-*.css
-admin-panel/AI-CONTEXT.md                                ← سند به‌روزشده (گاتچاهای ۱۹ تا ۲۱)
-```
+## فایل‌های بسته
+۱۷ فایل کد + AI-CONTEXT.md (مستندات API جدید) + public/build آماده.
