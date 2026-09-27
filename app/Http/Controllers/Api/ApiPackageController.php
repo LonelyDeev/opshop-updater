@@ -396,11 +396,13 @@ class ApiPackageController extends Controller
     }
 
     /* ===================================================================
-     *  POST /api/v1/packages/{slug}/verify-license
-     *  بررسی اعتبار لایسنس
-     *  Body: { license_key }
-     *  Response: { valid, expires_at, days_remaining, version, download_token, signature }
-     * =================================================================== */
+    *  POST /api/v1/packages/{slug}/verify-license
+    *  Body: { license_key }
+    *  Response: { valid, expires_at, days_remaining, version, download_token, signature }
+    *  ★ Fallback: اگر لایسنس نامعتبر/ناموجود بود ولی اشتراکِ فعالِ طرح‌محورِ
+    *    مشتری این پکیج را پوشش دهد (و تاریخش منقضی نشده باشد)، لایسنس جدید
+    *    صادر و پاسخ معتبر برگردانده می‌شود.
+    * =================================================================== */
     public function verifyLicense(Request $request, string $slug): JsonResponse
     {
         $request->validate([
@@ -420,17 +422,24 @@ class ApiPackageController extends Controller
                 ->where('customer_id', $customer->id)
                 ->first();
 
-            if (!$license) {
-                return response()->json([
-                    'valid'   => false,
-                    'message' => 'لایسنس متعلق به این مشتری نیست.',
-                ], 403);
-            }
+            // ---------- لایسنس پیدا شد ----------
+            if ($license) {
+                $result = $this->licenseService->verify($license);
 
-            $result = $this->licenseService->verify($license);
+                if ($result['valid']) {
+                    return $this->licenseVerifySuccess($license, $package, $customer, $result);
+                }
 
-            if (!$result['valid']) {
-                // اگه لایسنس منقضی شده و از طرح one-time بوده، پیام واضح بده
+                // ★ لایسنس منقضی/نامعتبر → اول اشتراک چک شود
+                $subscription = $this->subscriptionService->activeSubscriptionCovering($customer, $package);
+                if ($subscription && $this->subscriptionHasTime($subscription)) {
+                    return $this->verifyViaSubscriptionResponse(
+                        $customer, $package, $subscription,
+                        'لایسنس قبلی منقضی شده بود؛ دسترسی به‌صورت خودکار از طریق اشتراک فعال شما تأیید و لایسنس جدید صادر شد.'
+                    );
+                }
+
+                // پیام‌های قبلی (بدون اشتراک)
                 $plan = $license->purchase?->pricingPlan;
                 if ($plan && $plan->is_one_time) {
                     return response()->json([
@@ -443,27 +452,31 @@ class ApiPackageController extends Controller
                 return response()->json($result);
             }
 
-            $latestVersion = $package->latestVersion()->first();
+            // ---------- لایسنس پیدا نشد ----------
+            // گارد امنیتی: اگر این کلید برای مشتری/پکیج دیگری ثبت شده، از مسیر اشتراک عبور نکنیم
+            $keyExistsGlobally = \App\Models\PackageLicense::where('license_key', $request->license_key)
+                ->where('package_id', $package->id)
+                ->exists();
 
-            if (!$latestVersion) {
-                return response()->json(['error' => 'نسخه فعالی برای این پکیج وجود ندارد.'], 422);
+            if (!$keyExistsGlobally) {
+                $subscription = $this->subscriptionService->activeSubscriptionCovering($customer, $package);
+                if ($subscription && $this->subscriptionHasTime($subscription)) {
+                    return $this->verifyViaSubscriptionResponse(
+                        $customer, $package, $subscription,
+                        'لایسنس یافت نشد؛ دسترسی از طریق اشتراک فعال شما تأیید و لایسنس جدید صادر شد.'
+                    );
+                }
             }
+
             return response()->json([
-                'valid'         => true,
-                'expires_at'    => $result['expires_at'],
-                'days_remaining'=> $result['days_remaining'],
-                'is_unlimited'  => $result['is_unlimited'] ?? false,
-                'version'       => $latestVersion?->version,
-                'signature'     => $latestVersion?->file_hash,
-                'download_token' => $latestVersion
-                    ? $this->createDownloadToken($license, $latestVersion, $customer)
-                    : null,
-            ]);
+                'valid'   => false,
+                'message' => 'لایسنس متعلق به این مشتری نیست.',
+            ], 403);
+
         } catch (RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
         }
     }
-
     /* ===================================================================
      *  GET /api/v1/packages/{slug}/check-update
      *  Query: { current_version }
@@ -653,5 +666,96 @@ class ApiPackageController extends Controller
         ]);
 
         return $token->token;
+    }
+
+    /* ===================================================================
+ *  Helper - آیا اشتراک تاریخِ باقی‌مانده دارد؟
+ *  null = نامحدود → مجاز؛ در غیر این صورت باید آینده باشد
+ * =================================================================== */
+    private function subscriptionHasTime(Subscription $subscription): bool
+    {
+        if ($subscription->expires_at === null) {
+            return true;
+        }
+        return $subscription->expires_at->isFuture();
+    }
+
+    /* ===================================================================
+     *  Helper - پاسخ موفق verify از مسیر اشتراک (با صدور لایسنس idempotent)
+     * =================================================================== */
+    private function verifyViaSubscriptionResponse(
+        Customer $customer,
+        Package $package,
+        Subscription $subscription,
+        string $message
+    ): JsonResponse {
+        $plan      = $subscription->plan;
+        $covered   = $plan?->packages->firstWhere('id', $package->id);
+        $freeMonths = (int) ($covered?->pivot->free_months ?? 1);
+
+        $latestVersion = $package->latestVersion()->first();
+        if (!$latestVersion) {
+            return response()->json(['valid' => false, 'message' => 'نسخه فعالی برای این پکیج وجود ندارد.'], 422);
+        }
+
+        // idempotent: لایسنس فعال موجود → همان؛ وگرنه صدور جدید
+        $license = $this->authService->getActiveLicense($customer, $package->slug);
+
+        if (!$license) {
+            $license = $subscription->order
+                ? $this->subscriptionService->grantPackageAccess($customer, $package, $freeMonths, $subscription->order)
+                : $this->subscriptionService->grantFreeAccess(
+                    $customer,
+                    $package,
+                    $freeMonths,
+                    'صدور مجدد لایسنس از طریق اشتراک (verify-license fallback).'
+                );
+        }
+
+        Log::info('License verified via subscription fallback', [
+            'package'  => $package->slug,
+            'customer' => $customer->id,
+            'subscription' => $subscription->id,
+        ]);
+
+        return response()->json([
+            'valid'            => true,
+            'via_subscription' => true,
+            'plan'             => $plan?->name,
+            'license_key'      => $license->license_key,   // ★ پروژه باید این را ذخیره کند
+            'expires_at'       => $license->expires_at?->toDateTimeString(),
+            'days_remaining'   => $license->days_remaining,
+            'is_unlimited'     => $license->expires_at === null,
+            'version'          => $latestVersion->version,
+            'signature'        => $latestVersion->file_hash,
+            'download_token'   => $this->createDownloadToken($license, $latestVersion, $customer),
+            'message'          => $message,
+        ]);
+    }
+
+    /* ===================================================================
+     *  Helper - پاسخ موفق verify عادی (یکسان‌سازی شکل پاسخ + license_key)
+     * =================================================================== */
+    private function licenseVerifySuccess(
+        \App\Models\PackageLicense $license,
+        Package $package,
+        Customer $customer,
+        array $result
+    ): JsonResponse {
+        $latestVersion = $package->latestVersion()->first();
+        if (!$latestVersion) {
+            return response()->json(['error' => 'نسخه فعالی برای این پکیج وجود ندارد.'], 422);
+        }
+
+        return response()->json([
+            'valid'          => true,
+            'expires_at'     => $result['expires_at'],
+            'days_remaining' => $result['days_remaining'],
+            'is_unlimited'   => $result['is_unlimited'] ?? false,
+            'license_key'    => $license->license_key,
+            'version'        => $latestVersion->version,
+            'signature'      => $latestVersion->file_hash,
+            'download_token' => $this->createDownloadToken($license, $latestVersion, $customer),
+        ]);
     }
 }
