@@ -410,7 +410,11 @@ class ApiPackageController extends Controller
 
             $package = Package::where('slug', $slug)->first();
             if (!$package) {
-                return response()->json(['valid' => false, 'message' => 'پکیج یافت نشد.'], 404);
+                return response()->json([
+                    'valid'   => false,
+                    'reason'  => 'package_not_found',
+                    'message' => 'پکیج یافت نشد.',
+                ], 404);
             }
 
             // ---------- ۱) لایسنس مستقل مشتری ----------
@@ -427,9 +431,7 @@ class ApiPackageController extends Controller
                 }
             }
 
-            // ---------- ۲) ★ لایسنس معتبر ندارد (کلید ناموجود یا منقضی) ----------
-            //    مشتری ممکن است پکیج را جدا نخریده باشد و فقط اشتراک داشته باشد.
-            //    اگر اشتراکِ فعالِ تاریخ‌دارش این پکیج را پوشش می‌دهد → اجازه + صدور لایسنس
+            // ---------- ۲) اشتراک فعالِ تاریخ‌دار ----------
             $subscription = $this->subscriptionService->activeSubscriptionCovering($customer, $package);
 
             if ($subscription && $this->subscriptionHasTime($subscription)) {
@@ -437,24 +439,47 @@ class ApiPackageController extends Controller
             }
 
             // ---------- ۳) نه لایسنس معتبر، نه اشتراک ----------
+
+            // ۳-الف) هیچ لایسنسی با این کلید برای این پکیج ثبت نشده
             if (!$license) {
+                // بررسی کنیم آیا این کلید اصلاً برای مشتری دیگری ثبت شده یا کلاً وجود ندارد
+                $licenseExistsForOtherCustomer = \App\Models\PackageLicense::where('license_key', $request->license_key)
+                    ->where('package_id', $package->id)
+                    ->exists();
+
+                if ($licenseExistsForOtherCustomer) {
+                    return response()->json([
+                        'valid'   => false,
+                        'reason'  => 'license_not_owned',
+                        'message' => 'لایسنس متعلق به این مشتری نیست.',
+                    ], 403);
+                }
+
                 return response()->json([
                     'valid'   => false,
-                    'message' => 'لایسنس متعلق به این مشتری نیست.',
+                    'reason'  => 'no_license',
+                    'message' => 'لایسنس فعال ندارید.',
                 ], 403);
             }
 
+            // ۳-ب) لایسنس متعلق به مشتری است ولی معتبر نیست (منقضی/غیرفعال)
             $plan = $license->purchase?->pricingPlan;
             if ($plan && $plan->is_one_time) {
                 return response()->json([
                     'valid'       => false,
+                    'reason'      => 'one_time_expired',
                     'message'     => 'لایسنس این طرح (یک‌بار مصرف) منقضی شده است. این طرح قابل تمدید نیست. لطفاً طرح دیگری خریداری کنید.',
                     'is_one_time' => true,
                     'expires_at'  => $result['expires_at'] ?? null,
                 ]);
             }
 
-            return response()->json($this->licenseService->verify($license));
+            // لایسنس عادی منقضی شده
+            $verifyResult = $this->licenseService->verify($license);
+            $verifyResult['reason']  = 'expired';
+            $verifyResult['message'] = $verifyResult['message'] ?? 'لایسنس منقضی شده است.';
+
+            return response()->json($verifyResult);
 
         } catch (RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
