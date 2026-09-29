@@ -50,6 +50,22 @@ class ApiPackageController extends Controller
                 ->pluck('project_id')
                 ->unique();
 
+            if ($projectIds->isEmpty()) {
+                return response()->json([
+                    'valid'   => false,
+                    'reason'  => 'no_subscription',
+                    'message' => 'اشتراک فعال ندارید. لطفاً ابتدا یک طرح خریداری کنید.',
+                    'data'    => [],
+                    'meta'    => [
+                        'current_page' => 1,
+                        'last_page'    => 1,
+                        'total'        => 0,
+                        'per_page'     => (int) $request->input('per_page', 15),
+                    ],
+                    'subscription_summary' => null,
+                ], 403);
+            }
+
             $packages = Package::with(['latestVersion', 'activePricingPlans', 'images'])
                 ->whereIn('project_id', $projectIds)
                 ->where('status', Package::STATUS_ACTIVE)
