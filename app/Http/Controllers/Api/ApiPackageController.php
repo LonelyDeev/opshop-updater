@@ -96,7 +96,7 @@ class ApiPackageController extends Controller
                 'subscription_summary' => $this->subscriptionSummary($summarySubscription),
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 
@@ -145,7 +145,7 @@ class ApiPackageController extends Controller
                 'data' => $this->appendPurchaseInfo($package, $license, $subscriptionInfo),
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 
@@ -411,7 +411,7 @@ class ApiPackageController extends Controller
                 'error'  => 'وضعیت تراکنش: ' . $purchase->status,
             ], 400);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 500));
         }
     }
 
@@ -480,7 +480,7 @@ class ApiPackageController extends Controller
                     : null,
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 500));
         }
     }
 
@@ -531,7 +531,7 @@ class ApiPackageController extends Controller
                 'file_size'          => $latestVersion->file_size,
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 

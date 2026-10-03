@@ -66,7 +66,7 @@ class ApiSubscriptionController extends Controller
                 ],
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 
@@ -141,7 +141,7 @@ class ApiSubscriptionController extends Controller
                 'order_id'       => $order->id,
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 422);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 422));
         }
     }
 
@@ -200,7 +200,7 @@ class ApiSubscriptionController extends Controller
                 'message'        => $result['message'] ?? null,
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 
@@ -258,7 +258,7 @@ class ApiSubscriptionController extends Controller
                 ],
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 

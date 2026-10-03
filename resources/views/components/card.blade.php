@@ -6,7 +6,9 @@
 --}}
 @props(['title' => null, 'subtitle' => null, 'padding' => 'p-5 sm:p-6', 'headerPadding' => null])
 
-<section {{ $attributes->merge(['class' => 'card']) }}>
+{{-- body-class به‌عنوان اتریبیوت مجازی فقط روی بدنه اعمال می‌شود؛
+     بنابراین از ریشه (section) حذف می‌شود تا به‌صورت اتریبیوت HTML نامعتبر رندر نشود. --}}
+<section {{ $attributes->except('body-class')->merge(['class' => 'card']) }}>
     @if($title || isset($header))
         <header class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 px-5 py-4 dark:border-zinc-800 sm:px-6">
             <div class="min-w-0">
@@ -26,11 +28,9 @@
         </header>
     @endif
 
-        @props(['padding' => null])
-
-        <div {{ $attributes->class([$padding,$attributes->get('body-class'),])->except('body-class') }}>
-            {{ $slot }}
-        </div>
+    <div {{ $attributes->class([$padding, $attributes->get('body-class')])->except('body-class') }}>
+        {{ $slot }}
+    </div>
 
     @isset($footer)
         <footer class="border-t border-zinc-200/80 px-5 py-4 dark:border-zinc-800 sm:px-6">

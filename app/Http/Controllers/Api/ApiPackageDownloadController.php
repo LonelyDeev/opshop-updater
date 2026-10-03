@@ -74,7 +74,7 @@ class ApiPackageDownloadController extends Controller
 
             return $this->streamVersionFile($version);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 
@@ -115,7 +115,7 @@ class ApiPackageDownloadController extends Controller
 
             return $this->streamVersionFile($version);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 
@@ -159,7 +159,7 @@ class ApiPackageDownloadController extends Controller
                 'file_hash'           => $version->file_hash,
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
+            return response()->json(['error' => $e->getMessage()], exception_status($e, 403));
         }
     }
 

@@ -43,6 +43,39 @@ if (! function_exists('shaparak_proxy')) {
     }
 }
 
+if (! function_exists('exception_status')) {
+    /**
+     * کد وضعیت HTTP امن از روی کد استثنا.
+     *
+     * ⚠️ ریشه‌یابِ خطای «JsonResponse::__construct(): Argument #2 ($status)
+     * must be of type int, string given»:
+     * PDOException (که خودش RuntimeException است!) کد SQLSTATE مثل "HY000"
+     * یا "23000" برمی‌گرداند — یعنی یک «رشته». چنین رشته‌ای به‌عنوان status
+     * به response()->json() می‌رسید و TypeError می‌داد. این هِلپر فقط کدهای
+     * صحیحِ ۱۰۰ تا ۵۹۹ را برمی‌گرداند و در غیر این صورت مقدار پیش‌فرض.
+     */
+    function exception_status(\Throwable $e, int $fallback = 500): int
+    {
+        $code = $e->getCode();
+
+        // PDOException و برخی استثناها کد را به‌صورت رشته (SQLSTATE) برمی‌گردانند
+        if (is_int($code) && $code >= 100 && $code <= 599) {
+            return $code;
+        }
+
+        // رشته‌های عددی معتبر (مثل "404") هم پذیرفته می‌شوند
+        if (is_string($code) && ctype_digit($code)) {
+            $code = (int) $code;
+
+            if ($code >= 100 && $code <= 599) {
+                return $code;
+            }
+        }
+
+        return $fallback;
+    }
+}
+
 if (! function_exists('gateway_logo_url')) {
     /**
      * URL لوگوی درگاه — لوگوی اختصاصی آپلودشده یا لوگوی پیش‌فرض (public/uploads/gateways/logos/{key}.svg)
