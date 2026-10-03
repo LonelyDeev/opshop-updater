@@ -26,9 +26,11 @@
         </header>
     @endif
 
-    <div {{ $padding ? 'class="'.trim($padding.' '.$attributes->get('body-class', '')).'"' : '' }}>
-        {{ $slot }}
-    </div>
+        @props(['padding' => null])
+
+        <div {{ $attributes->class([$padding,$attributes->get('body-class'),])->except('body-class') }}>
+            {{ $slot }}
+        </div>
 
     @isset($footer)
         <footer class="border-t border-zinc-200/80 px-5 py-4 dark:border-zinc-800 sm:px-6">
