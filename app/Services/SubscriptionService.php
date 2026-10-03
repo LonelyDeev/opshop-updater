@@ -104,6 +104,20 @@ class SubscriptionService
                 'gateway'      => null,
             ]);
 
+            // 📱 پیامک: تأیید ثبت درخواست به مشتری + اطلاع‌رسانی فوری به مدیر
+            try {
+                $vars = [
+                    'customer_name' => $customer->name,
+                    'plan_name'     => $plan->name,
+                    'amount'        => 'رایگان',
+                ];
+
+                $this->sms()->send('subscription_request_ack', $customer->phone, $vars, $order, once: true);
+                $this->sms()->notifyAdmin('admin_subscription_request', $vars, $order);
+            } catch (\Throwable) {
+                // پیامک هرگز نباید جریان اصلی را بشکند
+            }
+
             return [
                 'order'    => $order,
                 'is_free'  => true,
@@ -270,11 +284,24 @@ class SubscriptionService
             throw new RuntimeException('این درخواست قبلاً تأیید و اشتراک فعال شده است؛ نمی‌توان آن را رد کرد.');
         }
 
+        $reason = $reason ?: 'درخواست شما توسط مدیر رد شد.';
+
         $order->update([
             'admin_status'    => SubscriptionOrder::ADMIN_STATUS_REJECTED,
             'rejected_at'     => now(),
-            'rejected_reason' => $reason ?: 'درخواست شما توسط مدیر رد شد.',
+            'rejected_reason' => $reason,
         ]);
+
+        // 📱 پیامک: اطلاع رد درخواست به مشتری
+        try {
+            $this->sms()->send('subscription_rejected', $order->customer?->phone, [
+                'customer_name' => $order->customer?->name ?? 'مشتری',
+                'plan_name'     => $order->plan_name,
+                'reason'        => $reason,
+            ], $order, once: true);
+        } catch (\Throwable) {
+            // پیامک هرگز نباید جریان اصلی را بشکند
+        }
     }
 
     /* ===================================================================

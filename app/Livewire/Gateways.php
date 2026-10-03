@@ -5,19 +5,25 @@ namespace App\Livewire;
 use App\Livewire\Concerns\WithBulkActions;
 use App\Livewire\Concerns\WithToasts;
 use App\Models\Gateway;
+use App\Services\ImageUploadService;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 #[Layout('components.layouts.app')]
 #[Title('درگاه‌های پرداخت')]
 class Gateways extends Component
 {
-    use WithToasts, WithBulkActions;
+    use WithToasts, WithBulkActions, WithFileUploads;
 
     /** @var array<int, array<string, mixed>> */
     public array $gateways = [];
+
+    /** فایل‌های لوگوی جدید — کلید = شناسه درگاه */
+    public array $logoUploads = [];
 
     /** فیلتر نمایش/ترتیب: جدیدترین، قدیمی‌ترین، شناسه، ترتیب نمایش و نام */
     #[Url]
@@ -71,7 +77,74 @@ class Gateways extends Component
             }
         }
 
+        // آپلود لوگوهای جدید (در صورت انتخاب)
+        $this->uploadPendingLogos();
+
+        $this->logoUploads = [];
+
+        $this->loadGateways(ensure: false);
+
         $this->toast('تنظیمات درگاه‌های پرداخت با موفقیت ذخیره شد.');
+    }
+
+    /* ---------------------------------------------------------------- */
+    /*  لوگوی درگاه                                                       */
+    /* ---------------------------------------------------------------- */
+
+    /** آپلود لوگوهای انتخاب‌شده برای هر درگاه */
+    private function uploadPendingLogos(): void
+    {
+        if (empty($this->logoUploads)) {
+            return;
+        }
+
+        $service = app(ImageUploadService::class);
+
+        foreach ($this->logoUploads as $gatewayId => $file) {
+            if (!$file) {
+                continue;
+            }
+
+            $gateway = Gateway::find((int) $gatewayId);
+
+            if (!$gateway) {
+                continue;
+            }
+
+            try {
+                // حذف لوگوی قبلی (اگر اختصاصی بود)
+                if ($gateway->logo) {
+                    $service->deleteFile($gateway->logo);
+                }
+
+                $gateway->update([
+                    'logo' => $service->uploadGatewayLogo($file, $gateway->key),
+                ]);
+            } catch (\Throwable $e) {
+                $this->toast('خطا در آپلود لوگوی «' . ($gateway->name ?: $gateway->key) . '»: ' . $e->getMessage(), 'error');
+            }
+        }
+    }
+
+    /** حذف لوگوی اختصاصی و بازگشت به لوگوی پیش‌فرض */
+    public function removeLogo(int $gatewayId): void
+    {
+        $gateway = Gateway::findOrFail($gatewayId);
+
+        if ($gateway->logo) {
+            app(ImageUploadService::class)->deleteFile($gateway->logo);
+            $gateway->update(['logo' => null]);
+        }
+
+        $this->loadGateways(ensure: false);
+
+        $this->toast('لوگوی اختصاصی حذف شد؛ لوگوی پیش‌فرض نمایش داده می‌شود.');
+    }
+
+    /** URL لوگوی درگاه (اختصاصی یا پیش‌فرض) — برای ویو */
+    public static function logoUrl(array $gw): ?string
+    {
+        return gateway_logo_url($gw['key'], $gw['logo'] ?? null);
     }
 
     /* ---------------------------------------------------------------- */
@@ -169,7 +242,8 @@ class Gateways extends Component
                 ['name' => 'merchantId', 'label' => 'کد پذیرنده', 'type' => 'text'],
             ]],
             'sep' => ['label' => 'درگاه سامان SEP (REST جدید)', 'fields' => [
-                ['name' => 'terminalId', 'label' => 'کد پایانه/پذیرنده', 'type' => 'text'],
+                ['name' => 'terminalId', 'label' => 'کد پایانه/پذیرنده (UUID یا عددی)', 'type' => 'text'],
+                ['name' => 'mode', 'label' => 'مُد درایور (خالی=خودکار | v1 | onlinepg)', 'type' => 'text'],
             ]],
             'sadad' => ['label' => 'درگاه بانک ملی', 'fields' => [
                 ['name' => 'terminalId', 'label' => 'شماره پذیرنده', 'type' => 'text'],
@@ -178,6 +252,10 @@ class Gateways extends Component
             ]],
             'zibal' => ['label' => 'درگاه زیبال', 'fields' => [
                 ['name' => 'merchantId', 'label' => 'کد پذیرنده', 'type' => 'text'],
+            ]],
+            'local' => ['label' => 'درگاه آزمایشی (تست)', 'is_test' => true, 'fields' => [
+                ['name' => 'title', 'label' => 'عنوان صفحه درگاه', 'type' => 'text'],
+                ['name' => 'description', 'label' => 'توضیحات', 'type' => 'text'],
             ]],
         ];
     }
@@ -200,6 +278,13 @@ class Gateways extends Component
             }
         }
 
+        // اگر migration لوگو اجرا نشده باشد (نصب‌های قدیمی) ستون را صدا نزنیم
+        try {
+            $hasLogoColumn = \Illuminate\Support\Facades\Schema::hasColumn('gateways', 'logo');
+        } catch (\Throwable) {
+            $hasLogoColumn = false;
+        }
+
         $rows = Gateway::query()->with('configs')->get()->keyBy('key');
 
         $list = [];
@@ -210,7 +295,6 @@ class Gateways extends Component
             if (! $gateway) {
                 continue;
             }
-
             $stored = $gateway->configs->pluck('value', 'key')->all();
 
             $configs = [];
@@ -222,8 +306,10 @@ class Gateways extends Component
                 'id' => (int) $gateway->id,
                 'key' => (string) $gateway->key,
                 'name' => (string) $gateway->name,
+                'logo' => $hasLogoColumn ? $gateway->logo : null,
                 'ordering' => $gateway->ordering,
                 'is_active' => (bool) $gateway->is_active,
+                'is_test' => (bool) ($meta['is_test'] ?? false),
                 'configs' => $configs,
                 // فقط برای مرتب‌سازی (قبل از انتساب حذف می‌شوند)
                 '_created' => $gateway->created_at?->getTimestamp() ?? 0,

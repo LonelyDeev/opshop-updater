@@ -78,33 +78,62 @@ class WsdlCache
     }
 
     /**
-     * دانلود با cURL — TLS 1.2، تایم‌اوت ۲۰ ثانیه
+     * دانلود با cURL — TLS 1.2، تایم‌اوت ۲۵ ثانیه، اجبار IPv4، پروکسی شاپرک
+     *
+     * نکته‌های مهم:
+     *  - CURL_IPRESOLVE_V4: بعضی DNSها AAAA (IPv6) برمی‌گردانند و سوکت IPv6
+     *    سرور بی‌راه می‌ماند → اجبار IPv4.
+     *  - پروکسی شاپرک: اگر سرور خارج از ایران است (شاپرک به IP خارجی پاسخ
+     *    نمی‌دهد)، درخواست از پروکسی ثبت‌شده در تنظیمات عبور می‌کند.
      */
     private function download(string $url): ?string
     {
         $ch = curl_init($url);
 
-        curl_setopt_array($ch, [
+        $options = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS      => 3,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT        => 25,
+            CURLOPT_CONNECTTIMEOUT => 12,
+            CURLOPT_TIMEOUT        => 30,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_SSLVERSION     => CURL_SSLVERSION_TLSv1_2,
+            CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
             CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; Laravel-Payment/1.0)',
             CURLOPT_HTTPHEADER     => ['Accept: text/xml, application/xml, */*'],
-        ]);
+        ];
+
+        // پروکسی شاپرک (در صورت تنظیم)
+        $proxy = shaparak_proxy();
+
+        if ($proxy) {
+            $options[CURLOPT_PROXY] = $proxy;
+
+            // برای http proxy با https هدف، CONNECT تونل می‌زند؛ این پرچم لازم است
+            if (preg_match('#^https?://#i', $proxy)) {
+                $options[CURLOPT_HTTPPROXYTUNNEL] = true;
+            }
+        }
+
+        curl_setopt_array($ch, $options);
 
         $body   = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $error  = curl_error($ch);
+        $errno  = (int) curl_errno($ch);
         curl_close($ch);
 
         if ($body === false || $body === null || $body === '' || $status >= 400) {
+            // پیام خطای گویا برای تایم‌اوت (محدودیت جغرافیایی شاپرک)
+            $hint = '';
+
+            if (in_array($errno, [CURLE_OPERATION_TIMEDOUT, CURLE_COULDNT_CONNECT], true)) {
+                $hint = ' — سرور شما به شاپرک دسترسی ندارد؛ اگر هاست خارج از ایران است، پروکسی ایرانی در تنظیمات پرداخت ثبت کنید';
+            }
+
             throw new RuntimeException(
-                'دانلود WSDL ناموفق بود' . ($error ? " ({$error})" : '') . " — HTTP {$status}"
+                'دانلود WSDL ناموفق بود' . ($error ? " ({$error})" : '') . " — HTTP {$status}" . $hint
             );
         }
 

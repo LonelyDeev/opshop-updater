@@ -77,7 +77,14 @@
                     {{-- header: toggle + title --}}
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <h3 class="truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">{{ $template->title }}</h3>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                @if(str_starts_with($template->key, 'admin_'))
+                                    <x-badge variant="info" icon="bell">مدیر</x-badge>
+                                @else
+                                    <x-badge variant="neutral" icon="user">مشتری</x-badge>
+                                @endif
+                                <h3 class="truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">{{ $template->title }}</h3>
+                            </div>
                             <code dir="ltr" class="mt-0.5 block truncate font-mono text-[11px] text-zinc-400 dark:text-zinc-500">{{ $template->key }}</code>
                         </div>
                         <button type="button" wire:click="toggle({{ $template->id }})"

@@ -18,6 +18,53 @@ if (! function_exists('setting')) {
     }
 }
 
+if (! function_exists('shaparak_proxy')) {
+    /**
+     * آدرس پروکسی شاپرک (در صورت تنظیم) — برای هاست‌هایی که خارج از ایران
+     * هستند و شاپرک به IPهای خارجی پاسخ نمی‌دهد.
+     *
+     * فرمت‌های مجاز: http://ip:port | http://user:pass@ip:port | socks5://ip:port
+     * تنظیم از: پنل → تنظیمات → پرداخت → «پروکسی شاپرک»
+     */
+    function shaparak_proxy(): ?string
+    {
+        $proxy = trim((string) setting('payment_shaparak_proxy', ''));
+
+        if ($proxy === '') {
+            return null;
+        }
+
+        // اعتبارسنجی ساده
+        if (!preg_match('#^(https?|socks5h?|tcp)://[^\s]+$#i', $proxy)) {
+            return null;
+        }
+
+        return $proxy;
+    }
+}
+
+if (! function_exists('gateway_logo_url')) {
+    /**
+     * URL لوگوی درگاه — لوگوی اختصاصی آپلودشده یا لوگوی پیش‌فرض (public/uploads/gateways/logos/{key}.svg)
+     */
+    function gateway_logo_url(?string $key, ?string $customPath = null): ?string
+    {
+        if (blank($key)) {
+            return null;
+        }
+
+        // لوگوی اختصاصی (آپلودی) — از مسیر uploads/… سرو می‌شود
+        if (!blank($customPath)) {
+            return asset($customPath);
+        }
+
+        // لوگوی پیش‌فرض داخل پروژه
+        $default = public_path('uploads/gateways/logos/' . $key . '.svg');
+
+        return is_file($default) ? asset('uploads/gateways/logos/' . $key . '.svg') : null;
+    }
+}
+
 if (! function_exists('normalize_mobile')) {
     /**
      * نرمال‌سازی شماره موبایل ایرانی به فرمت 09xxxxxxxxx
@@ -134,8 +181,12 @@ function get_gateway_configs($gateway)
             break;
         }
         case "sep": {
-            // سامان SEP نسخه REST — همان کد پذیرنده/ترمینال سامان
+            // سامان SEP — ترمینال جدید (UUID) یا عددی
             $configs['terminalId'] = $gateway->config('terminalId') ?: $gateway->config('merchantId');
+            $mode = trim((string) ($gateway->config('mode') ?? ''));
+            if (in_array($mode, ['v1', 'onlinepg'], true)) {
+                $configs['mode'] = $mode; // خالی = خودکار (UUID → v1)
+            }
             break;
         }
         case "behpardakht": {

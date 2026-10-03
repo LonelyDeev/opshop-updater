@@ -79,6 +79,39 @@
             </div>
         </x-card>
 
+        {{-- payment settings --}}
+        <x-card id="payment" title="تنظیمات پرداخت" subtitle="پروکسی شاپرک و عیب‌یابی اتصال درگاه‌های بانکی.">
+            <div class="space-y-5">
+                <div class="rounded-xl bg-amber-50 p-4 text-xs leading-6 text-amber-800 ring-1 ring-amber-600/10 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20">
+                    <div class="flex items-start gap-2">
+                        <x-icon name="info" class="size-4.5 shrink-0" />
+                        <p><b>محدودیت جغرافیایی شاپرک:</b> شاپرک (سامان، سپهر، سداد و…) فقط به IPهای داخل ایران پاسخ می‌دهد. اگر هاست شما خارج از ایران است، تمام درخواست‌های شاپرک Timeout می‌شوند. راه‌حل: یک <b>پروکسی یا سرور واسط ایرانی</b> تهیه کنید و آدرسش را اینجا ثبت کنید — همه درخواست‌های درگاه‌های شاپرکی (سامان کلاسیک، سامان SEP، سپهر) از آن عبور خواهند کرد.</p>
+                    </div>
+                </div>
+
+                <x-field label="پروکسی شاپرک (اختیاری)" for="payment_shaparak_proxy" hint="مثال: http://IP:PORT یا http://user:pass@IP:PORT یا socks5://IP:PORT">
+                    <x-input id="payment_shaparak_proxy" wire:model="form.payment_shaparak_proxy" placeholder="socks5://1.2.3.4:1080" icon="globe" dir="ltr" class="{{ $errBag->has('form.payment_shaparak_proxy') ? 'input-error' : '' }}" />
+                </x-field>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <x-btn variant="secondary" icon="activity" wire:click="testShaparakConnection" :loading="true">تست اتصال به شاپرک</x-btn>
+                    <span class="text-xs text-zinc-500">DNS + TCP + HTTPS به sep.shaparak.ir — با پروکسی ثبت‌شده (در صورت وجود)</span>
+                </div>
+
+                @if($shaparakTest)
+                    <div class="rounded-xl p-4 ring-1 {{ $shaparakTest['ok'] ? 'bg-brand-50 text-brand-800 ring-brand-600/10 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-400/20' : 'bg-rose-50 text-rose-800 ring-rose-600/10 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20' }}">
+                        <div class="flex items-start gap-2.5">
+                            <x-icon name="{{ $shaparakTest['ok'] ? 'check-circle' : 'alert-triangle' }}" class="size-5 shrink-0" />
+                            <div class="space-y-1">
+                                <p class="text-sm font-black">{{ $shaparakTest['title'] }}</p>
+                                <p class="text-xs leading-6">{{ $shaparakTest['message'] }}</p>
+                            </div>
+                        </div>
+                    </div>
+                @endif
+            </div>
+        </x-card>
+
         {{-- sms settings --}}
         <x-card id="sms" title="تنظیمات پیامک" subtitle="سیستم پیامک برای خرید، اشتراک، تمدید و انقضا — با ۵ درایور ایرانی.">
             <div class="space-y-5">

@@ -194,20 +194,7 @@
 
                                 @if($plan->final_price > 0)
                                     <div>
-                                        <label class="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-200">
-                                            <x-icon name="credit-card" class="size-3.5 text-brand-600 dark:text-brand-400" />
-                                            درگاه پرداخت
-                                        </label>
-                                        <select wire:model.live="gatewayKey" class="input">
-                                            @foreach($this->gateways as $gateway)
-                                                <option value="{{ $gateway->key }}">{{ $gateway->name }}</option>
-                                            @endforeach
-                                        </select>
-                                        @if($this->gateways->isEmpty())
-                                            <p class="mt-1.5 rounded-xl bg-amber-50 p-2.5 text-xs font-bold text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-400/20">
-                                                درگاه پرداختی فعال نیست؛ با پشتیبانی تماس بگیرید.
-                                            </p>
-                                        @endif
+                                        @include('livewire.shop.partials.gateway-picker', ['gateways' => $this->gateways])
                                     </div>
                                 @endif
 

@@ -13,6 +13,7 @@ use App\Services\LicenseService;
 use App\Services\PackageApiAuthService;
 use App\Services\PaymentService;
 use App\Services\SubscriptionService;
+use App\Services\Sms\SmsManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +25,8 @@ class ApiPackageController extends Controller
         private PackageApiAuthService $authService,
         private PaymentService $paymentService,
         private LicenseService $licenseService,
-        private SubscriptionService $subscriptionService
+        private SubscriptionService $subscriptionService,
+        private SmsManager $smsManager
     ) {}
 
     /* ===================================================================
@@ -88,6 +90,8 @@ class ApiPackageController extends Controller
                     'total'        => $packages->total(),
                     'per_page'     => $packages->perPage(),
                 ],
+                // درگاه‌های فعال — برای نمایش کارت انتخاب درگاه در فروشگاه خریدار
+                'gateways' => $this->presentGateways(),
                 // خلاصه اشتراک فعالِ طرح‌محور (کنار meta)
                 'subscription_summary' => $this->subscriptionSummary($summarySubscription),
             ]);
@@ -367,6 +371,22 @@ class ApiPackageController extends Controller
                     $license = $purchase->license;
                     $latestVersion = $purchase->package->latestVersion()->first();
 
+                    // 📱 پیامک: خرید پکیج (تأیید از مسیر API) + اطلاع مدیر
+                    // (once → اگر قبلاً از مسیر کال‌بک ارسال شده، تکرار نمی‌شود)
+                    try {
+                        $vars = [
+                            'customer_name' => $purchase->customer?->name ?? 'مشتری',
+                            'package_name'  => $purchase->package?->name ?? 'پکیج',
+                            'amount'        => number_format((int) $purchase->amount),
+                            'license_key'   => (string) ($result['license_key'] ?? $license?->license_key ?? ''),
+                        ];
+
+                        $this->smsManager->send('purchase_paid', $purchase->customer?->phone, $vars, $purchase, once: true);
+                        $this->smsManager->notifyAdmin('admin_purchase_paid', $vars, $purchase);
+                    } catch (\Throwable) {
+                        // پیامک هرگز نباید جریان خرید را بشکند
+                    }
+
                     return response()->json([
                         'paid'         => true,
                         'license_key'  => $license?->license_key,
@@ -513,6 +533,26 @@ class ApiPackageController extends Controller
         } catch (RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 403);
         }
+    }
+
+    /* ===================================================================
+     *  Helper - درگاه‌های فعال برای نمایش به مشتری
+     * =================================================================== */
+    private function presentGateways(): array
+    {
+        return \App\Models\Gateway::query()
+            ->active()
+            ->orderBy('ordering')
+            ->orderBy('name')
+            ->get(['id', 'key', 'name', 'logo', 'ordering'])
+            ->map(fn (\App\Models\Gateway $gateway) => [
+                'key'   => $gateway->key,
+                'title' => $gateway->name,
+                'logo'  => gateway_logo_url($gateway->key, $gateway->logo),
+                'is_test' => $gateway->key === 'local',
+            ])
+            ->values()
+            ->all();
     }
 
     /* ===================================================================

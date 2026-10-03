@@ -27,13 +27,26 @@ class SamanCached extends BaseSaman
     {
         $localWsdl = app(WsdlCache::class)->resolve($wsdlUrl, 'saman-' . md5($wsdlUrl));
 
+        // کانتکست HTTP: TLS + پروکسی شاپرک (در صورت تنظیم)
+        $httpContext = [];
+
+        $proxy = shaparak_proxy();
+
+        if ($proxy) {
+            $httpContext['proxy'] = preg_match('#^(socks5?h?|tcp)://#i', $proxy)
+                ? $proxy
+                : preg_replace('#^(https?)://#i', 'tcp://', $proxy);
+            $httpContext['request_fulluri'] = true;
+        }
+
         try {
             return new \SoapClient($localWsdl, [
                 'encoding'           => 'UTF-8',
                 'cache_wsdl'         => WSDL_CACHE_DISK,   // کش دیسک (سرعت + مقاومت)
-                'connection_timeout' => 20,
+                'connection_timeout' => 25,
                 'stream_context'     => stream_context_create([
-                    'ssl' => [
+                    'http' => $httpContext,
+                    'ssl'  => [
                         'ciphers'           => 'DEFAULT:!DH',
                         'verify_peer'       => true,
                         'verify_host'       => 2,
@@ -47,7 +60,7 @@ class SamanCached extends BaseSaman
         } catch (\SoapFault $e) {
             // اگر با فایل لوکال هم نشد → پیام راهنمای فارسی با ریشه خطا
             $hint = str_contains($e->getMessage(), 'failed to load external entity')
-                ? ' (WSDL دانلود نشد؛ دسترسی خروجی سرور به sep.shaparak.ir را بررسی کنید)'
+                ? ' (WSDL دانلود نشد؛ سرور شما به شاپرک دسترسی ندارد — شاپرک به IPهای خارج از ایران پاسخ نمی‌دهد؛ در «تنظیمات → پرداخت» پروکسی ایرانی ثبت کنید)'
                 : '';
 
             throw new \SoapFault(

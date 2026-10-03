@@ -250,12 +250,19 @@ return [
             'currency' => 'T', //Can be R, T (Rial, Toman)
         ],
         'sep' => [
+            // مُد v1 — REST جدید سپ (ترمینال‌های UUID)
+            'apiV1Init' => 'https://sep.shaparak.ir/api/v1/payment/init',
+            'apiV1Verify' => 'https://sep.shaparak.ir/api/v1/payment/verify',
+            'apiV1PaymentPage' => 'https://sep.shaparak.ir/Payment',
+            // مُد onlinepg — آسان‌پرداخت (ترمینال عددی)
             'apiGetToken' => 'https://sep.shaparak.ir/onlinepg/onlinepg',
             'apiPaymentUrl' => 'https://sep.shaparak.ir/OnlinePG/OnlinePG',
+            'apiSendToken' => 'https://sep.shaparak.ir/OnlinePG/SendToken',
             'apiVerificationUrl' => 'https://sep.shaparak.ir/verifyTxnRandomSessionkey/ipg/VerifyTransaction',
+            'mode' => '', // خالی = خودکار (UUID→v1، عددی→onlinepg) | v1 | onlinepg
             'terminalId' => '',
             'callbackUrl' => '',
-            'description' => 'Saman Electronic Payment for Saderat & Keshavarzi',
+            'description' => 'Saman Electronic Payment (SEP) — v1/onlinepg',
             'currency' => 'T', //Can be R, T (Rial, Toman)
         ],
         'sepehr' => [

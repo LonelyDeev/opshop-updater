@@ -14,7 +14,7 @@ return new class extends Migration
             $table->foreignId('project_id')->constrained()->cascadeOnDelete();
             $table->string('slug')->unique();
             $table->string('name');
-            $table->string('short_description')->nullable();
+            $table->text('short_description')->nullable();
             $table->longText('description')->nullable();
             $table->string('author')->nullable();
             $table->string('category')->nullable();

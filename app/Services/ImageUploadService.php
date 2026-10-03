@@ -11,22 +11,29 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * سرویس آپلود تصاویر پکیج‌ها — مقاوم‌سازی‌شده برای هاست اشتراکی:
+ * سرویس آپلود تصاویر پکیج‌ها — مقاوم‌سازی‌شده برای هاست اشتراکی (نسخه ۲):
  *
  *  ۱) مسیر اصلی: public/uploads/… (سرو مستقیم توسط وب‌سرور)
  *  ۲) مسیر جایگزین (fallback): storage/app/public/uploads/…
  *     اگر public قابل نوشتن نباشد — از طریق روت /uploads/{path} سرو می‌شود.
  *
  *  در هر دو حالت مسیرِ ذخیره‌شده در دیتابیس یکسان است: uploads/…
- *  پس هیچ تغییری در فرانت/API لازم نیست.
+ *
+ *  🔧 تغییر نسخه ۲ (رفع ارور «Could not move the file …»):
+ *  Livewire فایل را ابتدا در storage/app/private/livewire-tmp قرار می‌دهد.
+ *  move() (rename داخلی) روی بعضی هاست‌ها بین این دو مسیر شکست می‌خورد
+ *  (سطح‌های مختلف filesystem یا محدودیت rename). طبق درخواست، به‌جای move
+ *  از copy() + unlink() استفاده می‌شود — tmp توسط Livewire هم خودکار پاک می‌شود.
+ *  نکته مهم: مسیر fallback قبلاً به اشتباه «uploads» را دوبار تکرار می‌کرد
+ *  (storage/app/public/uploads/uploads/…) — اصلاح شد.
  */
 class ImageUploadService
 {
     private const THUMBNAIL_DIR = 'uploads/packages/thumbnails';
     private const GALLERY_DIR   = 'uploads/packages/gallery';
 
-    /** دایرکتوری جایگزین وقتی public قابل نوشتن نیست */
-    private const FALLBACK_ROOT = 'public/uploads'; // داخل storage/app
+    /** ریشه‌ی جایگزین داخل storage/app */
+    private const FALLBACK_ROOT = 'public'; // → storage/app/public/uploads/…
 
     private const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     private const MAX_SIZE_KB   = 3072; // 3MB
@@ -39,7 +46,7 @@ class ImageUploadService
     {
         $this->validateImage($file);
 
-        $extension = $file->getClientOriginalExtension() ?: 'jpg';
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'jpg');
         $filename  = $slug . '_thumb_' . time() . '_' . Str::random(6) . '.' . $extension;
 
         return $this->storeFile($file, self::THUMBNAIL_DIR, $filename);
@@ -63,8 +70,8 @@ class ImageUploadService
 
                 $this->validateImage($file);
 
-                $extension    = $file->getClientOriginalExtension() ?: 'jpg';
-                $filename     = $package->slug . '_gallery_' . time() . '_' . Str::random(6) . '.' . $extension;
+                $extension = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+                $filename  = $package->slug . '_gallery_' . time() . '_' . Str::random(6) . '.' . $extension;
 
                 // ذخیره اطلاعات قبل از انتقال
                 $originalName = $file->getClientOriginalName();
@@ -92,45 +99,82 @@ class ImageUploadService
 
     /* ===================================================================
      *  هسته ذخیره‌سازی: public → در صورت عدم امکان، storage fallback
+     *  استراتژی: copy + unlink (به‌جای move/rename)
      * =================================================================== */
     private function storeFile(UploadedFile $file, string $relativeDir, string $filename): string
     {
+        // مسیر tmp واقعی فایل (livewire-tmp یا php upload tmp)
+        $source = $file->getRealPath();
+
+        if (!$source || !is_file($source)) {
+            throw new RuntimeException('فایل آپلودی روی سرور یافت نشد؛ لطفاً دوباره تلاش کنید.');
+        }
+
         $publicDir = public_path($relativeDir);
 
         // ۱) تلاش برای نوشتن در public
-        if ($this->ensureDirectory($publicDir)) {
-            try {
-                $file->move($publicDir, $filename);
-                @chmod($publicDir . '/' . $filename, 0644);
+        $stored = $this->copyTo($source, $publicDir, $filename);
 
-                return $relativeDir . '/' . $filename;
-            } catch (\Throwable $e) {
-                Log::warning('Upload to public dir failed, falling back to storage', [
-                    'dir'   => $relativeDir,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        } else {
-            Log::warning('Public upload dir is not writable — using storage fallback', [
-                'dir' => $relativeDir,
-                'hint' => 'دسترسی پوشه public/uploads را بررسی کنید (۷۷۵ یا مالکیت کاربر وب‌سرور).',
-            ]);
+        if ($stored === true) {
+            return $relativeDir . '/' . $filename;
         }
+
+        Log::warning('Upload to public dir failed, falling back to storage', [
+            'dir'   => $relativeDir,
+            'error' => is_string($stored) ? $stored : 'unknown',
+        ]);
 
         // ۲) مسیر جایگزین: storage/app/public/uploads/…
         $fallbackDir = storage_path('app/' . self::FALLBACK_ROOT . '/' . $relativeDir);
 
-        if (!$this->ensureDirectory($fallbackDir, 0775)) {
+        $stored = $this->copyTo($source, $fallbackDir, $filename);
+
+        if ($stored !== true) {
+            $reason = is_string($stored) ? $stored : 'دلیل نامشخص';
             throw new RuntimeException(
-                'ذخیره تصویر ناموفق بود؛ نه public و نه storage قابل نوشتن هستند. ' .
-                'لطفاً دسترسی پوشه‌های public/uploads و storage/app را بررسی کنید (۷۷۵).'
+                'ذخیره تصویر ناموفق بود (' . $reason . '). ' .
+                'لطفاً دسترسی (پرمیژن ۷۷۵) و مالکیت پوشه‌های «public/uploads» و «storage/app/public» را بررسی کنید.'
             );
         }
 
-        $file->move($fallbackDir, $filename);
-        @chmod($fallbackDir . '/' . $filename, 0644);
-
         return $relativeDir . '/' . $filename;
+    }
+
+    /**
+     * کپی فایل tmp به مقصد با ساخت خودکار دایرکتوری.
+     *
+     * @return bool|string true در صورت موفقیت؛ در خطا، پیام علت (string)
+     */
+    private function copyTo(string $source, string $targetDir, string $filename): bool|string
+    {
+        // ۱) ساخت دایرکتوری (بازگشتی) — اگر شکست خورد علت را گزارش کن
+        $dirOk = $this->ensureDirectory($targetDir);
+
+        if (!$dirOk) {
+            return 'ساخت/دسترسی پوشه «' . $targetDir . '» ممکن نیست (پرمیژن؟)';
+        }
+
+        $target = $targetDir . '/' . $filename;
+
+        // ۲) کپی (به‌جای rename) — بین دیسک‌ها/لایه‌های filesystem هم کار می‌کند
+        if (!@copy($source, $target)) {
+            $err = error_get_last()['message'] ?? 'copy failed';
+
+            // تلاش دوم با rename (اگر copy به هر دلیل نشد)
+            if (!@rename($source, $target)) {
+                return 'کپی فایل به «' . $target . '» ناموفق بود: ' . $err;
+            }
+        }
+
+        // ۳) پاک‌سازی tmp (Livewire خودش هم پاک می‌کند — این برای اطمینان است)
+        @chmod($target, 0644);
+
+        // اگر copy بود (نه rename) فایل tmp را پاک می‌کنیم
+        if (is_file($source) && $source !== $target) {
+            @unlink($source);
+        }
+
+        return true;
     }
 
     /**
@@ -139,17 +183,34 @@ class ImageUploadService
     private function ensureDirectory(string $path, int $mode = 0775): bool
     {
         if (!is_dir($path)) {
-            @mkdir($path, $mode, true);
+            // mkdir بازگشتی — سطح به سطح تا اگر والد‌ها مشکل داشتند هم بسازیم
+            if (!@mkdir($path, $mode, true) && !is_dir($path)) {
+                // والد را یک بار چک/اصلاح می‌کنیم و دوباره تلاش
+                @chmod(dirname($path), $mode);
+
+                if (!@mkdir($path, $mode, true) && !is_dir($path)) {
+                    return false;
+                }
+            }
         }
 
         // اگر وجود دارد ولی قابل نوشتن نیست → تلاش برای اصلاح دسترسی
         if (is_dir($path) && !is_writable($path)) {
             @chmod($path, $mode);
-            // والد را هم اصلاح می‌کنیم (مثلاً خود uploads)
             @chmod(dirname($path), $mode);
         }
 
-        return is_dir($path) && is_writable($path);
+        // تست واقعی نوشتن (is_writable روی بعضی NFS گمراه‌کننده است)
+        if (is_dir($path) && is_writable($path)) {
+            $probe = $path . '/.write_test_' . bin2hex(random_bytes(3));
+            if (@file_put_contents($probe, 'ok') !== false) {
+                @unlink($probe);
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /* ===================================================================
@@ -180,8 +241,8 @@ class ImageUploadService
         return $count;
     }
 
-    /** حذف فایل از public و در صورت نبود، از storage fallback */
-    private function deleteFile(string $relativePath): void
+    /** حذف فایل از public و در صورت نبود، از storage fallback (عمومی — برای لوگو درگاه‌ها هم استفاده می‌شود) */
+    public function deleteFile(string $relativePath): void
     {
         $publicPath   = public_path($relativePath);
         $fallbackPath = storage_path('app/' . self::FALLBACK_ROOT . '/' . $relativePath);
@@ -191,6 +252,39 @@ class ImageUploadService
                 @unlink($candidate);
             }
         }
+    }
+
+    /* ===================================================================
+     *  آپلود لوگوی درگاه (عمومی — در Gateways استفاده می‌شود)
+     *  Returns: مسیر نسبی (uploads/gateways/logos/xxx.svg) یا null
+     * =================================================================== */
+    public function uploadGatewayLogo(UploadedFile $file, string $key): ?string
+    {
+        if (!$file->isValid()) {
+            throw new RuntimeException('فایل لوگو معتبر نیست.');
+        }
+
+        $mime = $file->getMimeType();
+
+        $allowed = array_merge(self::ALLOWED_MIMES, [
+            'image/svg+xml',
+            'image/x-svg',
+            'application/octet-stream', // بعضی هاست‌ها svg را اینطور می‌شناسند
+        ]);
+
+        if (!in_array($mime, $allowed, true)) {
+            throw new RuntimeException('فرمت لوگو مجاز نیست؛ فقط JPG, PNG, WEBP, SVG.');
+        }
+
+        // برای SVG فقط پسوند .svg
+        $ext       = strtolower($file->getClientOriginalExtension() ?: 'png');
+        $ext       = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'], true) ? ($ext === 'jpeg' ? 'jpg' : $ext) : 'png';
+        $filename  = $key . '-' . time() . '-' . Str::random(4) . '.' . $ext;
+
+        $dir   = 'uploads/gateways/logos';
+        $probe = $this->storeFile($file, $dir, $filename);
+
+        return $probe;
     }
 
     /* ===================================================================

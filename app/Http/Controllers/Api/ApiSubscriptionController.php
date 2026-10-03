@@ -10,6 +10,7 @@ use App\Models\SubscriptionOrder;
 use App\Models\SubscriptionPlan;
 use App\Services\PackageApiAuthService;
 use App\Services\SubscriptionService;
+use App\Services\Sms\SmsManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -29,7 +30,8 @@ class ApiSubscriptionController extends Controller
 {
     public function __construct(
         private PackageApiAuthService $authService,
-        private SubscriptionService $subscriptionService
+        private SubscriptionService $subscriptionService,
+        private SmsManager $smsManager
     ) {}
 
     /* ===================================================================
@@ -55,6 +57,7 @@ class ApiSubscriptionController extends Controller
 
             return response()->json([
                 'data' => $plans->getCollection()->map(fn (SubscriptionPlan $plan) => $this->presentPlan($plan))->values(),
+                'gateways' => $this->presentGateways(),
                 'meta' => [
                     'current_page' => $plans->currentPage(),
                     'last_page'    => $plans->lastPage(),
@@ -168,6 +171,23 @@ class ApiSubscriptionController extends Controller
 
             $result = $this->subscriptionService->verifyPayment($transactionId);
             $order->refresh();
+
+            // 📱 پیامک: پرداخت اشتراک (تأیید از مسیر API) + اطلاع مدیر
+            // (once → اگر قبلاً از مسیر کال‌بک ارسال شده، تکرار نمی‌شود)
+            if (($result['paid'] ?? false) && $order->status === SubscriptionOrder::STATUS_PAID) {
+                try {
+                    $vars = [
+                        'customer_name' => $order->customer?->name ?? 'مشتری',
+                        'plan_name'     => $order->plan_name,
+                        'amount'        => number_format((int) $order->final_amount),
+                    ];
+
+                    $this->smsManager->send('subscription_paid', $order->customer?->phone, $vars, $order, once: true);
+                    $this->smsManager->notifyAdmin('admin_subscription_paid', $vars, $order);
+                } catch (\Throwable) {
+                    // پیامک هرگز نباید جریان را بشکند
+                }
+            }
 
             return response()->json([
                 'paid'           => $result['paid'] ?? false,
@@ -301,6 +321,27 @@ class ApiSubscriptionController extends Controller
         }
 
         return $freePackages;
+    }
+
+    /**
+     * درگاه‌های فعال برای نمایش به مشتری (انتخاب درگاه در فروشگاه خریدار).
+     * شامل لوگو و عنوان تا فروشگاه بتواند کارت‌های انتخاب زیبا بسازد.
+     */
+    private function presentGateways(): array
+    {
+        return Gateway::query()
+            ->active()
+            ->orderBy('ordering')
+            ->orderBy('name')
+            ->get(['id', 'key', 'name', 'logo', 'ordering'])
+            ->map(fn (Gateway $gateway) => [
+                'key'   => $gateway->key,
+                'title' => $gateway->name,
+                'logo'  => gateway_logo_url($gateway->key, $gateway->logo),
+                'is_test' => $gateway->key === 'local',
+            ])
+            ->values()
+            ->all();
     }
 
     private function presentPlan(SubscriptionPlan $plan): array

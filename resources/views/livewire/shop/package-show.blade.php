@@ -309,10 +309,7 @@
                 {{-- gateway --}}
                 @if(!$this->isFreeRoute && !$this->isCoveredBySubscription)
                     @if($this->gateways->isNotEmpty())
-                        @php($gatewayOptions = $this->gateways->mapWithKeys(fn ($g) => [$g->key => $g->name . ' (' . $g->key . ')'])->all())
-                        <x-field label="درگاه پرداخت" for="gatewayKey" required>
-                            <x-select id="gatewayKey" wire:model.live="gatewayKey" :options="$gatewayOptions" />
-                        </x-field>
+                        @include('livewire.shop.partials.gateway-picker', ['gateways' => $this->gateways])
                     @else
                         <div class="flex items-start gap-3 rounded-xl bg-amber-50 p-4 text-amber-700 ring-1 ring-amber-600/10 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-400/20">
                             <x-icon name="alert-triangle" class="mt-0.5 size-5 shrink-0" />

@@ -70,17 +70,28 @@
                     @endphp
 
                     <div wire:key="gw-{{ $gw['id'] }}" class="card flex flex-col">
-                        {{-- gateway header --}}
+                        {{-- gateway header: logo + title --}}
                         <div class="flex items-center gap-3 border-b border-zinc-200/80 p-4 dark:border-zinc-800">
                             <input type="checkbox" class="checkbox shrink-0" aria-label="انتخاب این درگاه"
                                    wire:model.live="selectedIds" value="{{ $gw['id'] }}" />
-                            <div class="flex size-11 shrink-0 items-center justify-center rounded-xl {{ $gw['is_active'] ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500' }}">
-                                <x-icon name="credit-card" class="size-5.5" />
+                            {{-- logo (اختصاصی یا پیش‌فرض) --}}
+                            @php($logoUrl = \App\Livewire\Gateways::logoUrl($gw))
+                            <div class="h-11 w-[110px] shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-zinc-200/80 dark:ring-zinc-700/60">
+                                @if($logoUrl)
+                                    <img src="{{ $logoUrl }}" alt="لوگوی {{ $gw['name'] }}" class="h-full w-full object-contain" />
+                                @else
+                                    <div class="flex h-full w-full items-center justify-center text-zinc-400">
+                                        <x-icon name="credit-card" class="size-5.5" />
+                                    </div>
+                                @endif
                             </div>
                             <div class="min-w-0 flex-1">
                                 <p class="truncate font-bold text-zinc-800 dark:text-zinc-100">{{ $meta['label'] ?? $gw['name'] }}</p>
-                                <div class="mt-1 flex items-center gap-2">
+                                <div class="mt-1 flex flex-wrap items-center gap-2">
                                     <x-badge :variant="$gw['is_active'] ? 'success' : 'danger'">{{ $gw['is_active'] ? 'فعال' : 'غیرفعال' }}</x-badge>
+                                    @if($gw['is_test'] ?? false)
+                                        <x-badge variant="warning" icon="flask">درگاه تست</x-badge>
+                                    @endif
                                     <span class="font-mono text-[11px] text-zinc-400" dir="ltr">{{ $gw['key'] }}</span>
                                 </div>
                             </div>
@@ -116,6 +127,39 @@
                                     </x-field>
                                 @endif
                             @endforeach
+
+                            {{-- لوگوی اختصاصی --}}
+                            <div class="rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+                                <p class="mb-2 text-xs font-bold text-zinc-600 dark:text-zinc-300">لوگوی اختصاصی (اختیاری)</p>
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <input type="file" wire:model="logoUploads.{{ $gw['id'] }}" accept="image/*,.svg"
+                                           class="block w-full text-xs text-zinc-500 file:me-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-zinc-600 hover:file:bg-zinc-200 dark:text-zinc-400 dark:file:bg-zinc-800 dark:file:text-zinc-300"
+                                           aria-label="آپلود لوگوی درگاه {{ $gw['name'] }}" />
+                                    @if($gw['logo'])
+                                        <button type="button" wire:click="removeLogo({{ $gw['id'] }})"
+                                                class="rounded-lg px-2.5 py-1.5 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
+                                            حذف لوگوی فعلی
+                                        </button>
+                                    @endif
+                                    <div wire:loading wire:target="logoUploads.{{ $gw['id'] }}" class="flex items-center gap-1.5 text-xs text-brand-600 dark:text-brand-400">
+                                        <x-icon name="loader" class="size-3.5 animate-spin" />
+                                        در حال آپلود موقت…
+                                    </div>
+                                    @if(($logoUploads[$gw['id']] ?? null) && $logoUploads[$gw['id']]->isPreviewable())
+                                        <div class="flex items-center gap-2">
+                                            <img src="{{ $logoUploads[$gw['id']]->temporaryUrl() }}" alt="پیش‌نمایش" class="h-9 w-[90px] rounded-lg bg-white object-contain ring-1 ring-zinc-200 dark:ring-zinc-700" />
+                                            <span class="text-[11px] text-zinc-400">پس از «ذخیره» اعمال می‌شود</span>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            @if($gw['is_test'] ?? false)
+                                <div class="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs leading-6 text-amber-800 ring-1 ring-amber-600/10 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20">
+                                    <x-icon name="info" class="size-4 shrink-0" />
+                                    <p>این درگاه فقط برای <b>تست جریان پرداخت</b> است و پول واقعی جابه‌جا نمی‌کند. با خاموش کردن کلید بالا، درگاه آزمایشی از لیست انتخاب مشتریان حذف می‌شود.</p>
+                                </div>
+                            @endif
                         </div>
                     </div>
                 @endforeach
