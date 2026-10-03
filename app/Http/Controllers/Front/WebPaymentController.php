@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PackagePurchase;
 use App\Models\SubscriptionOrder;
 use App\Services\PaymentService;
+use App\Services\Sms\SmsManager;
 use App\Services\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,7 +31,8 @@ class WebPaymentController extends Controller
 {
     public function __construct(
         private PaymentService $paymentService,
-        private SubscriptionService $subscriptionService
+        private SubscriptionService $subscriptionService,
+        private SmsManager $smsManager,
     ) {}
 
     public function callback(Request $request): RedirectResponse
@@ -55,6 +57,20 @@ class WebPaymentController extends Controller
         if ($subscriptionOrder) {
             $result = $this->subscriptionService->verifyPayment($transactionId);
             $subscriptionOrder->refresh();
+
+            // 📱 پیامک: پرداخت اشتراک تأیید شد (در انتظار تأیید مدیر) + اطلاع مدیر
+            if (($result['paid'] ?? false) && $subscriptionOrder->status === SubscriptionOrder::STATUS_PAID) {
+                $customer = $subscriptionOrder->customer;
+
+                $vars = [
+                    'customer_name' => $customer?->name ?? 'مشتری',
+                    'plan_name'     => $subscriptionOrder->plan_name,
+                    'amount'        => number_format((int) $subscriptionOrder->final_amount),
+                ];
+
+                $this->smsManager->send('subscription_paid', $customer?->phone, $vars, $subscriptionOrder, once: true);
+                $this->smsManager->notifyAdmin('subscription_paid', $vars, $subscriptionOrder);
+            }
 
             // سفارش API (callback_url بیرونی) → صفحه نتیجه + شمارش معکوس، سپس فروشگاه
             if ($subscriptionOrder->callback_url && !$this->isInternalCallback($subscriptionOrder->callback_url)) {
@@ -84,6 +100,19 @@ class WebPaymentController extends Controller
         $result = $this->paymentService->verifyPayment($transactionId, renew: true);
 
         $purchase->refresh();
+
+        // 📱 پیامک: خرید پکیج پرداخت شد + اطلاع مدیر
+        if (($result['paid'] ?? false) && $purchase->isPaid()) {
+            $vars = [
+                'customer_name' => $purchase->customer?->name ?? 'مشتری',
+                'package_name'  => $purchase->package?->name ?? 'پکیج',
+                'amount'        => number_format((int) $purchase->amount),
+                'license_key'   => (string) ($result['license_key'] ?? $purchase->license?->license_key ?? ''),
+            ];
+
+            $this->smsManager->send('purchase_paid', $purchase->customer?->phone, $vars, $purchase, once: true);
+            $this->smsManager->notifyAdmin('purchase_paid', $vars, $purchase);
+        }
 
         // خرید فروشگاه (API): ابتدا صفحه‌ی نتیجه + شمارش معکوس، سپس بازگشت به فروشگاه
         if ($purchase->callback_url && !$this->isInternalCallback($purchase->callback_url)) {

@@ -165,8 +165,11 @@ class Gateways extends Component
             'sepehr' => ['label' => 'درگاه سپهر (بانک صادرات)', 'fields' => [
                 ['name' => 'terminalId', 'label' => 'کد پذیرنده', 'type' => 'text'],
             ]],
-            'saman' => ['label' => 'درگاه سامان', 'fields' => [
+            'saman' => ['label' => 'درگاه سامان (کلاسیک)', 'fields' => [
                 ['name' => 'merchantId', 'label' => 'کد پذیرنده', 'type' => 'text'],
+            ]],
+            'sep' => ['label' => 'درگاه سامان SEP (REST جدید)', 'fields' => [
+                ['name' => 'terminalId', 'label' => 'کد پایانه/پذیرنده', 'type' => 'text'],
             ]],
             'sadad' => ['label' => 'درگاه بانک ملی', 'fields' => [
                 ['name' => 'terminalId', 'label' => 'شماره پذیرنده', 'type' => 'text'],

@@ -1,8 +1,18 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+/*
+|--------------------------------------------------------------------------
+| زمان‌بندی پیامک اشتراک‌ها
+|--------------------------------------------------------------------------
+| روی هاست اشتراکی یک کران‌جاب روزانه تنظیم کنید که اجرا شود:
+|   php artisan schedule:run
+| (مثلاً: 0 9 * * * cd /path/to/project && php artisan schedule:run)
+*/
+Schedule::command('sms:check-subscriptions')->dailyAt('09:00');

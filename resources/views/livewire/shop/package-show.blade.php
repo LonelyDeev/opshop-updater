@@ -46,7 +46,7 @@
                     <h1 class="text-xl font-black text-zinc-900 sm:text-2xl dark:text-zinc-50">{{ $package->name }}</h1>
 
                     @if($package->short_description)
-                        <p class="text-sm leading-7 text-zinc-500 dark:text-zinc-400">{{ $package->short_description }}</p>
+                        <p class="whitespace-pre-line text-sm leading-7 text-zinc-500 dark:text-zinc-400">{{ $package->short_description }}</p>
                     @endif
 
                     <div class="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">

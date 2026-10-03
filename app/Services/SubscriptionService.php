@@ -8,6 +8,7 @@ use App\Models\PackageLicense;
 use App\Models\Subscription;
 use App\Models\SubscriptionOrder;
 use App\Models\SubscriptionPlan;
+use App\Services\Sms\SmsManager;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +25,12 @@ class SubscriptionService
     public function __construct(
         private PaymentService $paymentService
     ) {}
+
+    /** پیامک پس از فعال‌سازی/تمدید (در صورت فعال بودن سیستم) */
+    private function sms(): SmsManager
+    {
+        return app(SmsManager::class);
+    }
 
     /* ===================================================================
      *  خرید طرح
@@ -239,6 +246,19 @@ class SubscriptionService
                 'granted_packages' => count($granted),
             ]);
 
+            // 📱 پیامک: اشتراک فعال شد (پس از commit دیتابیس)
+            DB::afterCommit(function () use ($customer, $order, $subscription, $expiresAt) {
+                try {
+                    $this->sms()->send('subscription_activated', $customer->phone, [
+                        'customer_name' => $customer->name ?? 'مشتری',
+                        'plan_name'     => $order->plan_name,
+                        'end_date'      => verta_date($expiresAt, 'Y/m/d') ?? $expiresAt?->format('Y/m/d'),
+                    ], $subscription, once: true);
+                } catch (\Throwable $e) {
+                    Log::warning('Activation SMS failed: ' . $e->getMessage());
+                }
+            });
+
             return $subscription;
         });
     }
@@ -307,7 +327,7 @@ class SubscriptionService
      */
     public function grantFreeAccess(Customer $customer, Package $package, int $freeMonths, ?string $note = null): PackageLicense
     {
-        return DB::transaction(function () use ($customer, $package, $freeMonths, $note) {
+        $license = DB::transaction(function () use ($customer, $package, $freeMonths, $note) {
             $existing = PackageLicense::query()
                 ->where('package_id', $package->id)
                 ->where('customer_id', $customer->id)
@@ -337,8 +357,32 @@ class SubscriptionService
                 $existing->update(['status' => PackageLicense::STATUS_REVOKED]);
             }
 
+            // 📱 پیامک: تمدید دسترسی رایگان (وقتی لایسنس قبلی وجود داشت)
+            if ($existing) {
+                DB::afterCommit(function () use ($customer, $package, $license, $note, $expiresAt) {
+                    try {
+                        // نام طرح از یادداشت لایسنس استخراج می‌شود (نمونه: دسترسی رایگان از طریق اشتراک «X»)
+                        $planName = 'اشتراک';
+                        if ($note && preg_match('/«(.+?)»/u', $note, $m)) {
+                            $planName = $m[1];
+                        }
+
+                        $this->sms()->send('subscription_renewed', $customer->phone, [
+                            'customer_name' => $customer->name ?? 'مشتری',
+                            'package_name'  => $package->name,
+                            'plan_name'     => $planName,
+                            'end_date'      => verta_date($expiresAt, 'Y/m/d') ?? $expiresAt?->format('Y/m/d'),
+                        ], $license);
+                    } catch (\Throwable $e) {
+                        Log::warning('Renewal SMS failed: ' . $e->getMessage());
+                    }
+                });
+            }
+
             return $license;
         });
+
+        return $license;
     }
 
     /* ===================================================================

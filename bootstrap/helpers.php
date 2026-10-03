@@ -1,5 +1,59 @@
 <?php
 
+if (! function_exists('setting')) {
+    /**
+     * خواندن تنظیمات از جدول settings (با کش ۶۰ ثانیه‌ای).
+     */
+    function setting(string $key, mixed $default = null): mixed
+    {
+        try {
+            return \Illuminate\Support\Facades\Cache::remember(
+                'setting:' . $key,
+                60,
+                fn () => \App\Models\Setting::query()->where('key', $key)->value('value')
+            ) ?? $default;
+        } catch (\Throwable) {
+            return $default;
+        }
+    }
+}
+
+if (! function_exists('normalize_mobile')) {
+    /**
+     * نرمال‌سازی شماره موبایل ایرانی به فرمت 09xxxxxxxxx
+     * (ارقام فارسی/عربی → لاتین، +98/0098/98 → 0)
+     */
+    function normalize_mobile(string|int|null $mobile): ?string
+    {
+        if (blank($mobile)) {
+            return null;
+        }
+
+        $number = en_num(trim((string) $mobile));
+        $number = preg_replace('/[^0-9]/', '', $number);
+
+        if ($number === '' || $number === null) {
+            return null;
+        }
+
+        // +989xxxxxxxxx / 00989xxxxxxxxx / 989xxxxxxxxx → 09xxxxxxxxx
+        if (str_starts_with($number, '0098')) {
+            $number = '0' . substr($number, 4);
+        } elseif (str_starts_with($number, '98') && strlen($number) === 12) {
+            $number = '0' . substr($number, 2);
+        } elseif (str_starts_with($number, '9') && strlen($number) === 10) {
+            $number = '0' . $number;
+        }
+
+        // موبایل معتبر ایران: 09xxxxxxxxx
+        if (preg_match('/^09\d{9}$/', $number)) {
+            return $number;
+        }
+
+        return null;
+    }
+}
+
 function get_gateway_configs($gateway)
 {
     $gateway = \App\Models\Gateway::where('key', $gateway)->first();
@@ -77,6 +131,11 @@ function get_gateway_configs($gateway)
         }
         case "saman": {
             $configs['merchantId'] = $gateway->config('merchantId');
+            break;
+        }
+        case "sep": {
+            // سامان SEP نسخه REST — همان کد پذیرنده/ترمینال سامان
+            $configs['terminalId'] = $gateway->config('terminalId') ?: $gateway->config('merchantId');
             break;
         }
         case "behpardakht": {

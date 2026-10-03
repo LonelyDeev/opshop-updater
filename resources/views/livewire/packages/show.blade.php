@@ -147,7 +147,7 @@
                                     <x-icon name="info" class="size-4 text-brand-600" />
                                     توضیح کوتاه
                                 </h3>
-                                <p class="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $package->short_description }}</p>
+                                <p class="max-h-96 overflow-y-auto whitespace-pre-line text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $package->short_description }}</p>
                             </div>
                         @endif
                     </div>
@@ -515,8 +515,8 @@
                 </x-field>
             </div>
 
-            <x-field label="توضیح کوتاه">
-                <x-input wire:model="form.short_description" :class="$errors->has('form.short_description') ? 'input-error' : ''" />
+            <x-field label="توضیح کوتاه" hint="متن کامل (تا ۱۰ هزار کاراکتر) — پشتیبانی از بیش از ۱۰۰۰ کلمه.">
+                <x-textarea wire:model="form.short_description" rows="5" :class="$errors->has('form.short_description') ? 'input-error' : ''"></x-textarea>
             </x-field>
 
             <x-ckeditor model="form.description" label="توضیحات کامل" :value="$form['description'] ?? ''" error="form.description" />

@@ -29,6 +29,29 @@ class Index extends Component
         'mail_port' => '587',
         'mail_username' => '',
         'mail_password' => '',
+
+        // ---- پیامک ----
+        'sms_enabled' => false,
+        'sms_driver' => 'kavenegar',
+        'sms_admin_mobile' => '',
+        'sms_notify_admin' => false,
+        'sms_expire_days' => '3',
+        // kavenegar
+        'sms_kavenegar_apikey' => '',
+        // melipayamak
+        'sms_melipayamak_username' => '',
+        'sms_melipayamak_password' => '',
+        'sms_melipayamak_from' => '',
+        // ippanel
+        'sms_ippanel_username' => '',
+        'sms_ippanel_password' => '',
+        'sms_ippanel_from' => '',
+        // farazsms
+        'sms_farazsms_apikey' => '',
+        'sms_farazsms_from' => '',
+        // idehpardazan
+        'sms_idehpardazan_apikey' => '',
+        'sms_idehpardazan_secretkey' => '',
     ];
 
     public bool $confirmCache = false;
@@ -47,17 +70,35 @@ class Index extends Component
         'mail_port' => 'email',
         'mail_username' => 'email',
         'mail_password' => 'email',
+
+        // ---- پیامک ----
+        'sms_enabled' => 'sms',
+        'sms_driver' => 'sms',
+        'sms_admin_mobile' => 'sms',
+        'sms_notify_admin' => 'sms',
+        'sms_expire_days' => 'sms',
+        'sms_kavenegar_apikey' => 'sms',
+        'sms_melipayamak_username' => 'sms',
+        'sms_melipayamak_password' => 'sms',
+        'sms_melipayamak_from' => 'sms',
+        'sms_ippanel_username' => 'sms',
+        'sms_ippanel_password' => 'sms',
+        'sms_ippanel_from' => 'sms',
+        'sms_farazsms_apikey' => 'sms',
+        'sms_farazsms_from' => 'sms',
+        'sms_idehpardazan_apikey' => 'sms',
+        'sms_idehpardazan_secretkey' => 'sms',
     ];
 
     public function mount(): void
     {
         $stored = Setting::query()
-            ->whereIn('group', ['general', 'email'])
+            ->whereIn('group', ['general', 'email', 'sms'])
             ->pluck('value', 'key');
 
         foreach (array_keys($this->form) as $key) {
             if ($stored->has($key)) {
-                $this->form[$key] = $key === 'mail_enabled'
+                $this->form[$key] = in_array($key, ['mail_enabled', 'sms_enabled', 'sms_notify_admin'], true)
                     ? (bool) filter_var($stored->get($key), FILTER_VALIDATE_BOOLEAN)
                     : (string) $stored->get($key);
             }
@@ -76,7 +117,7 @@ class Index extends Component
         foreach (self::GROUPS as $key => $group) {
             $value = $this->form[$key];
 
-            if ($key === 'mail_enabled') {
+            if (in_array($key, ['mail_enabled', 'sms_enabled', 'sms_notify_admin'], true)) {
                 $value = $value ? '1' : '0';
             }
 
@@ -85,6 +126,11 @@ class Index extends Component
 
         // پاک کردن کش تنظیمات (مطابق کنترلر قدیمی)
         Cache::forget('settings');
+
+        // کش کلیدهای sms_* (helper setting از کش ۶۰ثانیه‌ای استفاده می‌کند)
+        foreach (array_keys(self::GROUPS) as $key) {
+            Cache::forget('setting:' . $key);
+        }
 
         $this->toast('تنظیمات با موفقیت ذخیره شد.');
     }
@@ -145,6 +191,21 @@ class Index extends Component
             'form.mail_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'form.mail_username' => ['nullable', 'string', 'max:255'],
             'form.mail_password' => ['nullable', 'string', 'max:255'],
+
+            'form.sms_driver' => ['nullable', 'string', 'in:kavenegar,melipayamak,ippanel,farazsms,idehpardazan'],
+            'form.sms_admin_mobile' => ['nullable', 'string', 'max:20'],
+            'form.sms_expire_days' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'form.sms_kavenegar_apikey' => ['nullable', 'string', 'max:255'],
+            'form.sms_melipayamak_username' => ['nullable', 'string', 'max:255'],
+            'form.sms_melipayamak_password' => ['nullable', 'string', 'max:255'],
+            'form.sms_melipayamak_from' => ['nullable', 'string', 'max:255'],
+            'form.sms_ippanel_username' => ['nullable', 'string', 'max:255'],
+            'form.sms_ippanel_password' => ['nullable', 'string', 'max:255'],
+            'form.sms_ippanel_from' => ['nullable', 'string', 'max:255'],
+            'form.sms_farazsms_apikey' => ['nullable', 'string', 'max:255'],
+            'form.sms_farazsms_from' => ['nullable', 'string', 'max:255'],
+            'form.sms_idehpardazan_apikey' => ['nullable', 'string', 'max:255'],
+            'form.sms_idehpardazan_secretkey' => ['nullable', 'string', 'max:255'],
         ];
     }
 
@@ -154,6 +215,10 @@ class Index extends Component
             'form.mail_from_address.email' => 'آدرس ایمیل فرستنده معتبر نیست.',
             'form.mail_port.integer' => 'پورت باید عدد باشد.',
             'form.mail_port.max' => 'شماره پورت معتبر نیست.',
+            'form.sms_driver.in' => 'درایور پیامک معتبر نیست.',
+            'form.sms_expire_days.integer' => 'تعداد روز انقضا باید عدد باشد.',
+            'form.sms_expire_days.min' => 'حداقل ۱ روز.',
+            'form.sms_expire_days.max' => 'حداکثر ۶۰ روز.',
         ];
     }
 }

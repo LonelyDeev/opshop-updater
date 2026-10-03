@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PackagePurchase;
 use App\Services\LicenseService;
 use App\Services\PaymentService;
+use App\Services\Sms\SmsManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -13,7 +14,8 @@ class ApiPaymentCallbackController extends Controller
 {
     public function __construct(
         private PaymentService $paymentService,
-        private LicenseService $licenseService
+        private LicenseService $licenseService,
+        private SmsManager $smsManager
     ) {}
 
     /* ===================================================================
@@ -47,6 +49,21 @@ class ApiPaymentCallbackController extends Controller
 
         // تأیید پرداخت
         $result = $this->paymentService->verifyPayment($transactionId);
+
+        $purchase->refresh();
+
+        // 📱 پیامک: خرید پکیج پرداخت شد + اطلاع مدیر
+        if (($result['paid'] ?? false) && $purchase->isPaid()) {
+            $vars = [
+                'customer_name' => $purchase->customer?->name ?? 'مشتری',
+                'package_name'  => $purchase->package?->name ?? 'پکیج',
+                'amount'        => number_format((int) $purchase->amount),
+                'license_key'   => (string) ($result['license_key'] ?? $purchase->license?->license_key ?? ''),
+            ];
+
+            $this->smsManager->send('purchase_paid', $purchase->customer?->phone, $vars, $purchase, once: true);
+            $this->smsManager->notifyAdmin('purchase_paid', $vars, $purchase);
+        }
 
         // صفحه‌ی نتیجه + شمارش معکوس برای بازگشت به فروشگاه
         if ($purchase->callback_url && !$this->isInternalCallback($purchase->callback_url)) {

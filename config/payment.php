@@ -436,8 +436,10 @@ return [
         'paystar' => \Shetabit\Multipay\Drivers\Paystar\Paystar::class,
         'poolam' => \Shetabit\Multipay\Drivers\Poolam\Poolam::class,
         'sadad' => \Shetabit\Multipay\Drivers\Sadad\Sadad::class,
-        'saman' => \Shetabit\Multipay\Drivers\Saman\Saman::class,
-        'sep' => \Shetabit\Multipay\Drivers\SEP\SEP::class,
+        // سامان با WSDL لوکال‌کش‌شده (رفع خطای Couldn't load WSDL در هاست اشتراکی)
+        'saman' => \App\Services\Payments\SamanCached::class,
+        // سامان SEP نسخه REST (بدون SOAP) — جایگزین مطمئن برای هاست‌های بدون SOAP/WSDL
+        'sep' => \App\Services\Payments\SepRest::class,
         'sepehr' => \Shetabit\Multipay\Drivers\Sepehr\Sepehr::class,
         'walleta' => \Shetabit\Multipay\Drivers\Walleta\Walleta::class,
         'yekpay' => \Shetabit\Multipay\Drivers\Yekpay\Yekpay::class,

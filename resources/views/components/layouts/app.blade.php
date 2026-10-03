@@ -40,6 +40,13 @@
                 ['route' => 'admin.users.index', 'title' => 'کاربران', 'icon' => 'shield-check', 'match' => ['admin.users*']],
             ],
         ],
+        [
+            'label' => 'اطلاع‌رسانی',
+            'items' => [
+                ['route' => 'admin.sms.templates', 'title' => 'قالب‌های پیامک', 'icon' => 'message-square', 'match' => ['admin.sms.templates']],
+                ['route' => 'admin.sms.logs', 'title' => 'لاگ پیامک‌ها', 'icon' => 'send', 'match' => ['admin.sms.logs']],
+            ],
+        ],
     ];
 
     $pageTitle = $title ?? 'پنل مدیریت';

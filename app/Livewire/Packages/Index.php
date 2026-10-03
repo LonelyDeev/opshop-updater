@@ -253,7 +253,7 @@ class Index extends Component
             'form.project_id'        => ['required', 'exists:projects,id'],
             'form.name'              => ['required', 'string', 'max:255'],
             'form.slug'              => ['nullable', 'string', 'max:100', $slugUnique],
-            'form.short_description' => ['nullable', 'string', 'max:255'],
+            'form.short_description' => ['nullable', 'string', 'max:10000'],
             'form.description'       => ['nullable', 'string'],
             'form.author'            => ['nullable', 'string', 'max:100'],
             'form.category'          => ['nullable', 'string', 'max:50'],

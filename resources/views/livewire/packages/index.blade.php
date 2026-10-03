@@ -219,8 +219,8 @@
                 </x-field>
             </div>
 
-            <x-field label="توضیح کوتاه" hint="در کارت پکیج نمایش داده می‌شود (حداکثر ۲۵۵ کاراکتر).">
-                <x-input wire:model="form.short_description" placeholder="یک جمله درباره کاربرد پکیج…" :class="$errors->has('form.short_description') ? 'input-error' : ''" />
+            <x-field label="توضیح کوتاه" hint="متن کامل (تا ۱۰ هزار کاراکتر) — پشتیبانی از بیش از ۱۰۰۰ کلمه؛ در کارت‌ها خلاصه نمایش داده می‌شود.">
+                <x-textarea wire:model="form.short_description" rows="5" placeholder="توضیح کامل درباره کاربرد، ویژگی‌ها و مزایای پکیج… (می‌توانید بیش از ۱۰۰۰ کلمه بنویسید)" :class="$errors->has('form.short_description') ? 'input-error' : ''"></x-textarea>
             </x-field>
 
             <x-ckeditor model="form.description" label="توضیحات کامل" :value="$form['description'] ?? ''" error="form.description" />

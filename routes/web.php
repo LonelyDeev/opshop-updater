@@ -5,6 +5,15 @@ use App\Livewire\Dashboard;
 use Illuminate\Support\Facades\Route;
 
 /*
+|----------------------------------------------------------------------
+| سرو فایل‌های uploads (مسیر جایگزین وقتی public قابل نوشتن نیست)
+|----------------------------------------------------------------------
+*/
+Route::get('uploads/{path}', \App\Http\Controllers\Front\UploadsServeController::class)
+    ->where('path', '(.*)')
+    ->name('uploads.serve');
+
+/*
 |--------------------------------------------------------------------------
 | فروشگاه عمومی (Storefront)
 |--------------------------------------------------------------------------
@@ -78,4 +87,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     Route::get('settings', \App\Livewire\Settings\Index::class)->name('settings.index');
     Route::get('settings/gateways', \App\Livewire\Gateways::class)->name('settings.gateways');
     Route::get('users', \App\Livewire\Users\Index::class)->name('users.index');
+
+    // پیامک (قالب‌ها + لاگ ارسال)
+    Route::get('sms-templates', \App\Livewire\Sms\Templates::class)->name('sms.templates');
+    Route::get('sms-logs', \App\Livewire\Sms\Logs::class)->name('sms.logs');
 });

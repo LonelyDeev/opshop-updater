@@ -6,48 +6,43 @@ use App\Models\Package;
 use App\Models\PackageImage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
+/**
+ * سرویس آپلود تصاویر پکیج‌ها — مقاوم‌سازی‌شده برای هاست اشتراکی:
+ *
+ *  ۱) مسیر اصلی: public/uploads/… (سرو مستقیم توسط وب‌سرور)
+ *  ۲) مسیر جایگزین (fallback): storage/app/public/uploads/…
+ *     اگر public قابل نوشتن نباشد — از طریق روت /uploads/{path} سرو می‌شود.
+ *
+ *  در هر دو حالت مسیرِ ذخیره‌شده در دیتابیس یکسان است: uploads/…
+ *  پس هیچ تغییری در فرانت/API لازم نیست.
+ */
 class ImageUploadService
 {
-    private const THUMBNAIL_DIR = 'uploads/packages/thumbnails'; // تغییر مسیر
-    private const GALLERY_DIR   = 'uploads/packages/gallery'; // تغییر مسیر
+    private const THUMBNAIL_DIR = 'uploads/packages/thumbnails';
+    private const GALLERY_DIR   = 'uploads/packages/gallery';
+
+    /** دایرکتوری جایگزین وقتی public قابل نوشتن نیست */
+    private const FALLBACK_ROOT = 'public/uploads'; // داخل storage/app
 
     private const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     private const MAX_SIZE_KB   = 3072; // 3MB
 
     /* ===================================================================
      *  آپلود تصویر شاخص
-     *  Returns: مسیر فایل در public/uploads/packages/thumbnails
+     *  Returns: مسیر نسبی (uploads/packages/thumbnails/xxx.png)
      * =================================================================== */
     public function uploadThumbnail(UploadedFile $file, string $slug): string
     {
         $this->validateImage($file);
 
         $extension = $file->getClientOriginalExtension() ?: 'jpg';
-        $filename = $slug . '_thumb_' . time() . '_' . Str::random(6) . '.' . $extension;
+        $filename  = $slug . '_thumb_' . time() . '_' . Str::random(6) . '.' . $extension;
 
-        // مسیر کامل در پوشه public
-        $destinationPath = public_path(self::THUMBNAIL_DIR);
-
-        // ایجاد پوشه اگر وجود ندارد
-        if (!file_exists($destinationPath)) {
-            mkdir($destinationPath, 0755, true);
-        }
-
-        // ذخیره فایل در پوشه public
-        $file->move($destinationPath, $filename);
-
-        // مسیر نسبی برای ذخیره در دیتابیس
-        $path = self::THUMBNAIL_DIR . '/' . $filename;
-
-        if (!$path) {
-            throw new RuntimeException('خطا در ذخیره تصویر شاخص.');
-        }
-
-        return $path;
+        return $this->storeFile($file, self::THUMBNAIL_DIR, $filename);
     }
 
     /* ===================================================================
@@ -68,28 +63,22 @@ class ImageUploadService
 
                 $this->validateImage($file);
 
-                $extension = $file->getClientOriginalExtension() ?: 'jpg';
-                $filename = $package->slug . '_gallery_' . time() . '_' . Str::random(6) . '.' . $extension;
+                $extension    = $file->getClientOriginalExtension() ?: 'jpg';
+                $filename     = $package->slug . '_gallery_' . time() . '_' . Str::random(6) . '.' . $extension;
 
                 // ذخیره اطلاعات قبل از انتقال
                 $originalName = $file->getClientOriginalName();
-                $fileSize = $file->getSize(); // <-- ذخیره قبل از انتقال
+                $fileSize     = $file->getSize();
 
-                $destinationPath = public_path(self::GALLERY_DIR);
-                if (!file_exists($destinationPath)) {
-                    mkdir($destinationPath, 0755, true);
-                }
-
-                $file->move($destinationPath, $filename);
-                $path = self::GALLERY_DIR . '/' . $filename;
+                $path = $this->storeFile($file, self::GALLERY_DIR, $filename);
 
                 $nextOrder++;
 
                 $image = PackageImage::create([
                     'package_id'    => $package->id,
                     'path'          => $path,
-                    'original_name' => $originalName, // استفاده از متغیر ذخیره شده
-                    'size'          => $fileSize,     // استفاده از متغیر ذخیره شده
+                    'original_name' => $originalName,
+                    'size'          => $fileSize,
                     'sort_order'    => $nextOrder,
                     'is_active'     => true,
                 ]);
@@ -100,42 +89,108 @@ class ImageUploadService
 
         return $uploaded;
     }
+
     /* ===================================================================
-     *  حذف تصویر شاخص
+     *  هسته ذخیره‌سازی: public → در صورت عدم امکان، storage fallback
+     * =================================================================== */
+    private function storeFile(UploadedFile $file, string $relativeDir, string $filename): string
+    {
+        $publicDir = public_path($relativeDir);
+
+        // ۱) تلاش برای نوشتن در public
+        if ($this->ensureDirectory($publicDir)) {
+            try {
+                $file->move($publicDir, $filename);
+                @chmod($publicDir . '/' . $filename, 0644);
+
+                return $relativeDir . '/' . $filename;
+            } catch (\Throwable $e) {
+                Log::warning('Upload to public dir failed, falling back to storage', [
+                    'dir'   => $relativeDir,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        } else {
+            Log::warning('Public upload dir is not writable — using storage fallback', [
+                'dir' => $relativeDir,
+                'hint' => 'دسترسی پوشه public/uploads را بررسی کنید (۷۷۵ یا مالکیت کاربر وب‌سرور).',
+            ]);
+        }
+
+        // ۲) مسیر جایگزین: storage/app/public/uploads/…
+        $fallbackDir = storage_path('app/' . self::FALLBACK_ROOT . '/' . $relativeDir);
+
+        if (!$this->ensureDirectory($fallbackDir, 0775)) {
+            throw new RuntimeException(
+                'ذخیره تصویر ناموفق بود؛ نه public و نه storage قابل نوشتن هستند. ' .
+                'لطفاً دسترسی پوشه‌های public/uploads و storage/app را بررسی کنید (۷۷۵).'
+            );
+        }
+
+        $file->move($fallbackDir, $filename);
+        @chmod($fallbackDir . '/' . $filename, 0644);
+
+        return $relativeDir . '/' . $filename;
+    }
+
+    /**
+     * ساخت مطمئن دایرکتوری + اطمینان از قابل نوشتن بودن
+     */
+    private function ensureDirectory(string $path, int $mode = 0775): bool
+    {
+        if (!is_dir($path)) {
+            @mkdir($path, $mode, true);
+        }
+
+        // اگر وجود دارد ولی قابل نوشتن نیست → تلاش برای اصلاح دسترسی
+        if (is_dir($path) && !is_writable($path)) {
+            @chmod($path, $mode);
+            // والد را هم اصلاح می‌کنیم (مثلاً خود uploads)
+            @chmod(dirname($path), $mode);
+        }
+
+        return is_dir($path) && is_writable($path);
+    }
+
+    /* ===================================================================
+     *  حذف تصاویر (هر دو مسیر پاک می‌شوند)
      * =================================================================== */
     public function deleteThumbnail(Package $package): void
     {
-        if ($package->thumbnail && file_exists(public_path($package->thumbnail))) {
-            unlink(public_path($package->thumbnail));
+        if ($package->thumbnail) {
+            $this->deleteFile($package->thumbnail);
             $package->update(['thumbnail' => null]);
         }
     }
 
-    /* ===================================================================
-     *  حذف یک تصویر گالری
-     * =================================================================== */
     public function deleteGalleryImage(PackageImage $image): void
     {
-        if (file_exists(public_path($image->path))) {
-            unlink(public_path($image->path));
-        }
+        $this->deleteFile($image->path);
         $image->delete();
     }
 
-    /* ===================================================================
-     *  حذف همه‌ی گالری
-     * =================================================================== */
     public function deleteAllGalleryImages(Package $package): int
     {
         $count = 0;
         foreach ($package->images as $image) {
-            if (file_exists(public_path($image->path))) {
-                unlink(public_path($image->path));
-            }
+            $this->deleteFile($image->path);
             $image->delete();
             $count++;
         }
         return $count;
+    }
+
+    /** حذف فایل از public و در صورت نبود، از storage fallback */
+    private function deleteFile(string $relativePath): void
+    {
+        $publicPath   = public_path($relativePath);
+        $fallbackPath = storage_path('app/' . self::FALLBACK_ROOT . '/' . $relativePath);
+
+        foreach ([$publicPath, $fallbackPath] as $candidate) {
+            if (is_file($candidate)) {
+                @unlink($candidate);
+            }
+        }
     }
 
     /* ===================================================================

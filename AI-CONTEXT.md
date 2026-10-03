@@ -182,6 +182,23 @@ checkout در `Shop\PackageShow::buy()`: کد آپدیت → Customer → گار
 
 ---
 
+## ۶.۵ سیستم پیامک (Task 20)
+- **SmsManager::send(templateKey, mobile, vars, loggable, once)** — تنها نقطه ارسال؛ هرگز Exception نمی‌دهد.
+  - الگو: قالب از `sms_templates` (کلید + متن + variables + pattern_codes{driver}) → رندر → ارسال پترنی (اگر کد پترن درایور فعال ثبت شده) وگرنه متن خام (کاوه‌نگار/ملی‌پیامک) → ثبت در `sms_logs`.
+  - `once:true` = idempotent برای callbackهای درگاه (تکرار صفحه کال‌بک → یک پیامک).
+  - `notifyAdmin()` = کپی به `sms_admin_mobile` اگر `sms_notify_admin=1`.
+- **۵ درایور** (`app/Services/Sms/Drivers/`): kavenegar (VerifyLookup + send.json)، melipayamak (REST BaseServiceNumber/SendSMS — بدون SOAP)، ippanel (patterns/pattern)، farazsms (api.iranpayamak.com/ws/v1/sms/pattern + Api-Key)، idehpardazan (RestfulSms UltraFastSend/direct).
+- **تریگرها**: purchase_paid (WebPayment+ApiPaymentCallback)، subscription_paid (WebPayment)، subscription_activated (SubscriptionService::approve + DB::afterCommit)، subscription_renewed (grantFreeAccess وقتی لایسنس قبلی بود)، subscription_expiring/expired (فرمان `sms:check-subscriptions` روزانه ۹:00 — کران‌جاب schedule:run روی هاست لازم دارد).
+- **تنظیمات**: تب «پیامک» در admin/settings (کلیدهای group=sms در جدول settings — helper `setting()` با کش ۶۰ثانیه).
+- **UI**: admin/sms-templates (کارت‌گرید toggle+ویرایش+ارسال آزمایشی) + admin/sms-logs (جدول+مودال پاسخ خام).
+- **قالب‌های سیستمی** (غیرقابل حذف): ۶ کلید بالا — متن/پترن‌ها قابل ویرایش.
+
+## ۶.۶ رفع درگاه سامان (Task 20)
+- خطای هاست اشتراکی «SOAP-ERROR: Parsing WSDL: Couldn't load from sep.shaparak.ir» → **SamanCached** (`config/payment.php map.saman`): WSDL با cURL(TLS1.2) دانلود → `WsdlCache` (storage/app/wsdl-cache، TTL ۲۴h، فقط importها لوکال می‌شوند — soap:address دست‌نخورده) → SoapClient با فایل لوکال.
+- **درایور sep** (REST جدید — بدون SOAP): token از `onlinepg/onlinepg` + ریدایرکت `OnlinePG/OnlinePG` + verify `verifyTxnRandomSessionkey/ipg/VerifyTransaction`. در پنل: «سامان SEP (REST جدید)».
+- `public/.user.ini` برای هاست CGI: upload_max_filesize=320M (رفع خطای «versionFile failed to upload»).
+- آپلود تصویر: `ImageUploadService` حالا self-healing است (mkdir+chmod) و اگر public قابل نوشتن نبود → storage/app/public/uploads + سرو با روت `uploads/{path}` (UploadsServeController).
+
 ## ۷. گاتچاهای حیاتی (خلاصه تجربه — حتماً رعایت شود)
 
 1. **Blade**: کلاس bare ممنوع (`Route::` → `\Illuminate\Support\Facades\Route::`)؛ `@php(...)` inline را با بلاک `@php @endphp` قاطی نکنید؛ interpolation `{{ }}` **داخل تگ کامپوننت** (`<x-icon ... {{ $x }} />`) تگ را غیرقابل‌کامپایل می‌کند → با `@if` شاخه‌بندی کنید.
@@ -257,12 +274,15 @@ admin-panel/
 │  │                       Purchases/, Customers/, Subscriptions/, Users/, Reports/, Logs/,
 │  │                       Settings/, Gateways, Shop/(Home+PackageShow+PaymentResult), Concerns/WithToasts
 │  ├─ Http/Controllers/    Api/(ApiPackageController, ApiPaymentCallbackController, UpdateController,
-│  │                       ApiPackageDownloadController), Front/(WebPaymentController, UpdateDownloadController)
-│  ├─ Services/            PaymentService, LicenseService, PackageApiAuthService, ImageUploadService
+│  │                       ApiPackageDownloadController), Front/(WebPaymentController, UpdateDownloadController,
+│  │                       PaymentForm/Return, UploadsServeController)
+│  ├─ Services/            PaymentService, LicenseService, PackageApiAuthService, ImageUploadService,
+│  │                       SubscriptionService, Sms/(SmsManager + Drivers/۵درایور + Contracts),
+│  │                       Payments/(SamanCached + SepRest + WsdlCache)
 │  ├─ Models/              (بخش ۳)
 │  └─ View/Components/     Icon.php (رجیستری آیکون)
-├─ bootstrap/              app.php (CSRF except) + helpers.php (fa_num, money, verta_date, get_gateway_configs…)
-├─ config/general.php      supported_gateways (۱۱ درگاه ایرانی)
+├─ bootstrap/              app.php (CSRF except) + helpers.php (setting(), normalize_mobile(), fa_num, money, verta_date, get_gateway_configs…)
+├─ config/general.php      supported_gateways (۱۲ درگاه: saman + sep جدید)
 ├─ database/               migrations/ + database.sqlite (دمو) + demo-seed.php در ریشه پروژه
 ├─ packages/shetabit/      پکیج محلی پرداخت (source of truth — با composer نصب نمی‌شود دوباره)
 ├─ public/assets/ckeditor/ CKEditor 4.25.1-lts (self-hosted)
@@ -283,4 +303,7 @@ admin-panel/
 
 ---
 
-*آخرین به‌روزرسانی: بعد از فاز ۶ (CKEditor + فروشگاه + پرداخت + لودینگ). همه‌چیز در این لحظه تست‌شده و سبز است.*
+**گاتچای WSDL (۲۸)**: کشِ دیسک خود PHP (`/tmp/wsdl-*`) می‌تواند WSDLِ خراب قبلی را نگه دارد و حتی بعد از رفع فایل، `SoapFault: Unable to parse URL` بدهد → `rm /tmp/wsdl-*` و تکرار تست.
+**گاتچای WSDL (۲۹)**: در بازنویسی ارجاعات WSDL فقط `xsd:import/wsdl:import` را لوکال کنید؛ `soap:address location` آدرس واقعی درگاه است و نباید عوض شود.
+
+*آخرین به‌روزرسانی: بعد از Task 20 (پیامک کامل + رفع سامان + آپلود self-healing + توضیح کوتاه ۱۰۰۰+ کلمه). همه‌چیز E2E تست‌شده و سبز است.*

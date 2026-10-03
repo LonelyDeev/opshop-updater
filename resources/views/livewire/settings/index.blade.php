@@ -79,6 +79,109 @@
             </div>
         </x-card>
 
+        {{-- sms settings --}}
+        <x-card id="sms" title="تنظیمات پیامک" subtitle="سیستم پیامک برای خرید، اشتراک، تمدید و انقضا — با ۵ درایور ایرانی.">
+            <div class="space-y-5">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/60 dark:bg-zinc-800/40 dark:ring-zinc-700/60">
+                        <x-toggle wire:model="form.sms_enabled" label="فعال‌سازی سیستم پیامک" id="sms_enabled" />
+                    </div>
+                    <div class="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/60 dark:bg-zinc-800/40 dark:ring-zinc-700/60">
+                        <x-toggle wire:model="form.sms_notify_admin" label="اطلاع‌رسانی خریدها به مدیر" id="sms_notify_admin" />
+                    </div>
+                </div>
+
+                <div class="grid gap-5 sm:grid-cols-3">
+                    <x-field label="درایور پیامک" for="sms_driver">
+                        <select id="sms_driver" wire:model.live="form.sms_driver" class="input">
+                            @foreach(\App\Models\SmsTemplate::DRIVERS as $key => $label)
+                                <option value="{{ $key }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </x-field>
+
+                    <x-field label="شماره موبایل مدیر" for="sms_admin_mobile" hint="برای اطلاع‌رسانی خریدها (اگر فعال باشد).">
+                        <x-input id="sms_admin_mobile" wire:model="form.sms_admin_mobile" placeholder="09123456789" dir="ltr" class="{{ $errBag->has('form.sms_admin_mobile') ? 'input-error' : '' }}" />
+                    </x-field>
+
+                    <x-field label="هشدار چند روز قبل از انقضا؟" for="sms_expire_days" hint="پیامک «روبه‌انقضا» به مشتری ارسال می‌شود.">
+                        <x-input id="sms_expire_days" wire:model="form.sms_expire_days" type="number" min="1" max="60" placeholder="3" dir="ltr" class="{{ $errBag->has('form.sms_expire_days') ? 'input-error' : '' }}" />
+                    </x-field>
+                </div>
+
+                {{-- credentials per driver --}}
+                <div class="space-y-4">
+                    @if($form['sms_driver'] === 'kavenegar')
+                        <div class="rounded-xl border border-brand-300/50 bg-brand-50/40 p-4 dark:border-brand-400/20 dark:bg-brand-500/5">
+                            <p class="mb-3 text-sm font-bold text-zinc-800 dark:text-zinc-100">🟢 کاوه‌نگار — <span class="text-xs font-medium text-zinc-500">ارسال پترنی (Verify Lookup) + متن خام</span></p>
+                            <x-field label="کلید API" for="sms_kavenegar_apikey" hint="از پنل کاوه‌نگار: بخش API Key.">
+                                <x-input id="sms_kavenegar_apikey" wire:model="form.sms_kavenegar_apikey" placeholder="کلید API…" dir="ltr" class="{{ $errBag->has('form.sms_kavenegar_apikey') ? 'input-error' : '' }}" />
+                            </x-field>
+                        </div>
+                    @elseif($form['sms_driver'] === 'melipayamak')
+                        <div class="rounded-xl border border-brand-300/50 bg-brand-50/40 p-4 dark:border-brand-400/20 dark:bg-brand-500/5">
+                            <p class="mb-3 text-sm font-bold text-zinc-800 dark:text-zinc-100">🟢 ملی‌پیامک — <span class="text-xs font-medium text-zinc-500">ارسال پترنی (BaseServiceNumber) + متن خام</span></p>
+                            <div class="grid gap-4 sm:grid-cols-3">
+                                <x-field label="نام کاربری" for="sms_melipayamak_username">
+                                    <x-input id="sms_melipayamak_username" wire:model="form.sms_melipayamak_username" dir="ltr" />
+                                </x-field>
+                                <x-field label="رمز عبور" for="sms_melipayamak_password">
+                                    <x-input id="sms_melipayamak_password" wire:model="form.sms_melipayamak_password" type="password" dir="ltr" />
+                                </x-field>
+                                <x-field label="شماره خط فرستنده" for="sms_melipayamak_from" hint="مثلاً 5000…">
+                                    <x-input id="sms_melipayamak_from" wire:model="form.sms_melipayamak_from" dir="ltr" />
+                                </x-field>
+                            </div>
+                        </div>
+                    @elseif($form['sms_driver'] === 'ippanel')
+                        <div class="rounded-xl border border-brand-300/50 bg-brand-50/40 p-4 dark:border-brand-400/20 dark:bg-brand-500/5">
+                            <p class="mb-3 text-sm font-bold text-zinc-800 dark:text-zinc-100">🟢 آی‌پی‌پنل — <span class="text-xs font-medium text-zinc-500">فقط ارسال پترنی؛ کد پترن هر قالب را در صفحه قالب‌ها وارد کنید</span></p>
+                            <div class="grid gap-4 sm:grid-cols-3">
+                                <x-field label="نام کاربری" for="sms_ippanel_username">
+                                    <x-input id="sms_ippanel_username" wire:model="form.sms_ippanel_username" dir="ltr" />
+                                </x-field>
+                                <x-field label="رمز عبور" for="sms_ippanel_password">
+                                    <x-input id="sms_ippanel_password" wire:model="form.sms_ippanel_password" type="password" dir="ltr" />
+                                </x-field>
+                                <x-field label="خط فرستنده (Originator)" for="sms_ippanel_from">
+                                    <x-input id="sms_ippanel_from" wire:model="form.sms_ippanel_from" dir="ltr" />
+                                </x-field>
+                            </div>
+                        </div>
+                    @elseif($form['sms_driver'] === 'farazsms')
+                        <div class="rounded-xl border border-brand-300/50 bg-brand-50/40 p-4 dark:border-brand-400/20 dark:bg-brand-500/5">
+                            <p class="mb-3 text-sm font-bold text-zinc-800 dark:text-zinc-100">🟢 فراز اس‌ام‌اس — <span class="text-xs font-medium text-zinc-500">فقط ارسال پترنی (api.iranpayamak.com)</span></p>
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <x-field label="کلید API" for="sms_farazsms_apikey" hint="از پنل فراز اس‌ام‌اس / ایوان پیامک.">
+                                    <x-input id="sms_farazsms_apikey" wire:model="form.sms_farazsms_apikey" dir="ltr" />
+                                </x-field>
+                                <x-field label="شماره خط" for="sms_farazsms_from">
+                                    <x-input id="sms_farazsms_from" wire:model="form.sms_farazsms_from" dir="ltr" />
+                                </x-field>
+                            </div>
+                        </div>
+                    @elseif($form['sms_driver'] === 'idehpardazan')
+                        <div class="rounded-xl border border-brand-300/50 bg-brand-50/40 p-4 dark:border-brand-400/20 dark:bg-brand-500/5">
+                            <p class="mb-3 text-sm font-bold text-zinc-800 dark:text-zinc-100">🟢 ایده پردازان — <span class="text-xs font-medium text-zinc-500">فقط ارسال پترنی (UltraFastSend / TemplateId)</span></p>
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <x-field label="کلید API (UserApiKey)" for="sms_idehpardazan_apikey">
+                                    <x-input id="sms_idehpardazan_apikey" wire:model="form.sms_idehpardazan_apikey" dir="ltr" />
+                                </x-field>
+                                <x-field label="SecretKey" for="sms_idehpardazan_secretkey">
+                                    <x-input id="sms_idehpardazan_secretkey" wire:model="form.sms_idehpardazan_secretkey" dir="ltr" />
+                                </x-field>
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 p-4 text-xs leading-6 text-amber-800 ring-1 ring-amber-600/10 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20">
+                        <x-icon name="info" class="size-4.5 shrink-0" />
+                        <p>متن قالب‌ها و <b>کد پترن</b> هر درایور را از <a href="{{ route('admin.sms.templates') }}" class="font-bold underline underline-offset-2">قالب‌های پیامک ←</a> مدیریت کنید. نتیجه ارسال‌ها در <a href="{{ route('admin.sms.logs') }}" class="font-bold underline underline-offset-2">لاگ پیامک‌ها</a> ثبت می‌شود. برای پیامک‌های روبه‌انقضا/منقضی‌شده یک کران‌جاب روزانه روی <code dir="ltr" class="rounded bg-amber-100/70 px-1 font-mono dark:bg-amber-500/10">php artisan schedule:run</code> تنظیم کنید.</p>
+                    </div>
+                </div>
+            </div>
+        </x-card>
+
         {{-- save --}}
         <div class="flex items-center justify-end gap-2">
             <x-btn type="submit" icon="save" :loading="true">ذخیره تنظیمات</x-btn>
